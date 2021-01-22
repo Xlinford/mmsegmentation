@@ -207,7 +207,7 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
         else:
             output = self.head(x, inputs)
 
-        if feat == None:
+        if feat != None:
             return output, feat
         else:
             return output
