@@ -133,7 +133,7 @@ class BaseSegmentor(nn.Module):
         this method, such as GAN.
 
         Args:
-            data (dict): The output of dataloader.
+            data_batch (dict): The output of dataloader.
             optimizer (:obj:`torch.optim.Optimizer` | dict): The optimizer of
                 runner is passed to ``train_step()``. This argument is unused
                 and reserved.

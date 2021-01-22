@@ -1,5 +1,5 @@
 from collections.abc import Sequence
-
+import sys
 import mmcv
 import numpy as np
 import torch
@@ -57,6 +57,7 @@ class ToTensor(object):
 
         for key in self.keys:
             results[key] = to_tensor(results[key])
+        print(f'ToTensor self.keys: {self.keys}')
         return results
 
     def __repr__(self):
@@ -95,6 +96,7 @@ class ImageToTensor(object):
             if len(img.shape) < 3:
                 img = np.expand_dims(img, -1)
             results[key] = to_tensor(img.transpose(2, 0, 1))
+        print(f'ImageToTensor self.keys: {self.keys}')
         return results
 
     def __repr__(self):
@@ -148,8 +150,7 @@ class ToDataContainer(object):
     """
 
     def __init__(self,
-                 fields=(dict(key='img',
-                              stack=True), dict(key='gt_semantic_seg'))):
+                 fields=(dict(key='img', stack=True), dict(key='img2', stack=True), dict(key='gt_semantic_seg'))):
         self.fields = fields
 
     def __call__(self, results):
@@ -168,6 +169,7 @@ class ToDataContainer(object):
             field = field.copy()
             key = field.pop('key')
             results[key] = DC(results[key], **field)
+        print(f'ToDataContainer:{self.fields}')
         return results
 
     def __repr__(self):
@@ -203,6 +205,13 @@ class DefaultFormatBundle(object):
                 img = np.expand_dims(img, -1)
             img = np.ascontiguousarray(img.transpose(2, 0, 1))
             results['img'] = DC(to_tensor(img), stack=True)
+        if 'img2' in results:
+            img2 = results['img2']
+            if len(img2.shape) < 3:
+                img2 = np.expand_dims(img2, -1)
+            img2 = np.ascontiguousarray(img2.transpose(2, 0, 1))
+            results['img2'] = DC(to_tensor(img2), stack=True)
+            # print('img2 has been converted')
         if 'gt_semantic_seg' in results:
             # convert to long
             results['gt_semantic_seg'] = DC(

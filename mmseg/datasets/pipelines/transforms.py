@@ -1,7 +1,11 @@
 import mmcv
 import numpy as np
+import cv2
+import logging
+import sys
 from mmcv.utils import deprecated_api_warning, is_tuple_of
 from numpy import random
+from torchvision import transforms
 
 from ..builder import PIPELINES
 
@@ -14,17 +18,21 @@ class Resize(object):
     contains the key "scale", then the scale in the input dict is used,
     otherwise the specified scale in the init method is used.
 
-    ``img_scale`` can either be a tuple (single-scale) or a list of tuple
-    (multi-scale). There are 3 multiscale modes:
+    ``img_scale`` can be Nong, a tuple (single-scale) or a list of tuple
+    (multi-scale). There are 4 multiscale modes:
 
-    - ``ratio_range is not None``: randomly sample a ratio from the ratio range
-    and multiply it with the image scale.
+    - ``ratio_range is not None``:
+    1. When img_scale is None, img_scale is the shape of image in results
+        (img_scale = results['img'].shape[:2]) and the image is resized based
+        on the original size. (mode 1)
+    2. When img_scale is a tuple (single-scale), randomly sample a ratio from
+        the ratio range and multiply it with the image scale. (mode 2)
 
     - ``ratio_range is None and multiscale_mode == "range"``: randomly sample a
-    scale from the a range.
+    scale from the a range. (mode 3)
 
     - ``ratio_range is None and multiscale_mode == "value"``: randomly sample a
-    scale from multiple scales.
+    scale from multiple scales. (mode 4)
 
     Args:
         img_scale (tuple or list[tuple]): Images scales for resizing.
@@ -49,10 +57,11 @@ class Resize(object):
             assert mmcv.is_list_of(self.img_scale, tuple)
 
         if ratio_range is not None:
-            # mode 1: given a scale and a range of image ratio
-            assert len(self.img_scale) == 1
+            # mode 1: given img_scale=None and a range of image ratio
+            # mode 2: given a scale and a range of image ratio
+            assert self.img_scale is None or len(self.img_scale) == 1
         else:
-            # mode 2: given multiple scales or a range of scales
+            # mode 3 and 4: given multiple scales or a range of scales
             assert multiscale_mode in ['value', 'range']
 
         self.multiscale_mode = multiscale_mode
@@ -150,8 +159,13 @@ class Resize(object):
         """
 
         if self.ratio_range is not None:
-            scale, scale_idx = self.random_sample_ratio(
-                self.img_scale[0], self.ratio_range)
+            if self.img_scale is None:
+                h, w = results['img'].shape[:2]
+                scale, scale_idx = self.random_sample_ratio((w, h),
+                                                            self.ratio_range)
+            else:
+                scale, scale_idx = self.random_sample_ratio(
+                    self.img_scale[0], self.ratio_range)
         elif len(self.img_scale) == 1:
             scale, scale_idx = self.img_scale[0], 0
         elif self.multiscale_mode == 'range':
@@ -317,6 +331,14 @@ class Pad(object):
             padded_img = mmcv.impad_to_multiple(
                 results['img'], self.size_divisor, pad_val=self.pad_val)
         results['img'] = padded_img
+        if 'img2' in results:
+            if self.size is not None:
+                padded_img2 = mmcv.impad(
+                    results['img2'], shape=self.size, pad_val=self.pad_val)
+            elif self.size_divisor is not None:
+                padded_img2 = mmcv.impad_to_multiple(
+                    results['img2'], self.size_divisor, pad_val=self.pad_val)
+            results['img2'] = padded_img2
         results['pad_shape'] = padded_img.shape
         results['pad_fixed_size'] = self.size
         results['pad_size_divisor'] = self.size_divisor
@@ -381,6 +403,10 @@ class Normalize(object):
 
         results['img'] = mmcv.imnormalize(results['img'], self.mean, self.std,
                                           self.to_rgb)
+        if 'img2' in results:
+            results['img2'] = mmcv.imnormalize(results['img2'], self.mean, self.std,
+                                              self.to_rgb)
+            # sys.exit('ppppp')
         results['img_norm_cfg'] = dict(
             mean=self.mean, std=self.std, to_rgb=self.to_rgb)
         return results
@@ -836,18 +862,8 @@ class PhotoMetricDistortion(object):
             img = mmcv.hsv2bgr(img)
         return img
 
-    def __call__(self, results):
-        """Call function to perform photometric distortion on images.
-
-        Args:
-            results (dict): Result dict from loading pipeline.
-
-        Returns:
-            dict: Result dict with images distorted.
-        """
-
-        img = results['img']
-        # random brightness
+    def once_operation(self, img):
+        """modify img in one code"""
         img = self.brightness(img)
 
         # mode == 0 --> do random contrast first
@@ -866,7 +882,24 @@ class PhotoMetricDistortion(object):
         if mode == 0:
             img = self.contrast(img)
 
-        results['img'] = img
+        return img
+
+    def __call__(self, results):
+        """Call function to perform photometric distortion on images.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Result dict with images distorted.
+        """
+
+        results['img'] = self.once_operation(results['img'])
+        # random brightness
+
+        if 'img2' in results:
+            results['img2'] = self.once_operation(results['img2'])
+
         return results
 
     def __repr__(self):
@@ -878,3 +911,148 @@ class PhotoMetricDistortion(object):
                      f'{self.saturation_upper}), '
                      f'hue_delta={self.hue_delta})')
         return repr_str
+
+
+@PIPELINES.register_module()
+class RandomMIOUCrop(object):
+    """Random crop the image & seg.
+
+    Args:
+        crop_size (tuple): Expected size after cropping, (h, w).
+        cat_max_ratio (float): The maximum ratio that single category could
+            occupy.
+    """
+
+    def __init__(self, crop_size, ignore_index=255, MIOU_range=(0.1, 1.0)):
+        assert crop_size[0] > 0 and crop_size[1] > 0
+        self.crop_size = crop_size
+        self.ignore_index = ignore_index
+        self.MIOU_range = MIOU_range
+        self.colorjitter = transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1, hue=0.1)
+
+    def MIOU_crop_ratio(self):
+        """Randomly sample an img_scale when ``ratio_range`` is specified."""
+        min_ratio, max_ratio = self.MIOU_range
+        assert min_ratio <= max_ratio
+        ratio = np.random.random_sample() * (max_ratio - min_ratio) + min_ratio
+        assert self.crop_size[0] == self.crop_size[1]
+        cover_region = (ratio * 2 * self.crop_size[0] ** 2 / (1.0 + ratio)) ** 0.5
+        return int(cover_region)
+
+    def crop_region_check(self, offset_corner_y, offset_corner_x, crop_2, img):
+        """Check crop region is satisfying IOU and image size or not"""
+        crop_intersection = (self.crop_size[0] - offset_corner_y) * (self.crop_size[1] - offset_corner_x)
+        IOU_size = crop_intersection / (2 * self.crop_size[0] * self.crop_size[1] - crop_intersection)
+
+        y1, y2, x1, x2 = crop_2
+        minisize = self.MIOU_range[0]
+        h = img.shape[0]
+        w = img.shape[1]
+        a = IOU_size > minisize
+        b = x1 > 0 and y1 > 0
+        c = x2.all() < w and y2.all() < h
+
+        check = a and b and c
+        return check
+
+    def get_crop_bbox(self, img):
+        """Randomly get a crop bounding box."""
+        # cover_region = self.MIOU_crop_ratio()
+        # offset_corner = self.crop_size[0] - cover_region
+        # margin_h = max(img.shape[0] - self.crop_size[0] - offset_corner, 0)
+        # margin_w = max(img.shape[1] - self.crop_size[1] - offset_corner, 0)
+
+        # offset_h = np.random.randint(offset_corner, margin_h + 1)
+        # offset_w = np.random.randint(offset_corner, margin_w + 1)
+
+        margin_h = max(img.shape[0] - self.crop_size[0], 0)
+        margin_w = max(img.shape[1] - self.crop_size[1], 0)
+        offset_h = np.random.randint(0, margin_h + 1)
+        offset_w = np.random.randint(0, margin_w + 1)
+        crop_1y1, crop_1y2 = offset_h, offset_h + self.crop_size[0]
+        crop_1x1, crop_1x2 = offset_w, offset_w + self.crop_size[1]
+
+        crop_1 = np.array([crop_1y1, crop_1y2, crop_1x1, crop_1x2])
+        crop_check = False
+        crop_2 = crop_1
+
+        while crop_check == False:
+            offset_corner_y = int((np.random.random() * 2 - 1.0) * self.crop_size[0])
+            offset_corner_x = int((np.random.random() * 2 - 1.0) * self.crop_size[1])
+            corner_y = np.array([offset_corner_y, offset_corner_y, 0, 0])
+            corner_x = np.array([0, 0, offset_corner_x, offset_corner_x])
+            # offset_corner_y = np.array([offset_corner, offset_corner, 0, 0])
+            # offset_corner_x = np.array([0, 0, offset_corner, offset_corner])
+            # corner_rand = [1, 1, -1, -1]
+            # np.random.shuffle(corner_rand)
+            # crop_2 = crop_1 + corner_rand[0] * offset_corner_y + corner_rand[1] * offset_corner_x
+            crop_2 = crop_1 + corner_y + corner_x
+
+            crop_check = self.crop_region_check(offset_corner_y, offset_corner_x, crop_2, img)
+
+
+        return crop_1, crop_2
+
+    def crop(self, img, crop_bbox):
+        """Crop from ``img``"""
+        crop_y1, crop_y2, crop_x1, crop_x2 = crop_bbox
+        img = img[crop_y1:crop_y2, crop_x1:crop_x2, ...]
+        return img
+
+    def __call__(self, results):
+        """Call function to randomly crop images, semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Randomly cropped results, 'img_shape' key in result dict is
+                updated according to crop size.
+        """
+
+        img_origin = results['img']
+        crop_bbox, crop_bbox2 = self.get_crop_bbox(img_origin)
+
+
+        # sys.exit('1')
+
+        # crop the image
+        img = self.crop(img_origin, crop_bbox)
+        img = self.pixel_augmentations(img)
+        results['img'] = img
+        # print('img', img.dtype)
+
+        img2 = self.crop(img_origin, crop_bbox2)
+        img2 = self.pixel_augmentations(img2)
+        results['img2'] = img2
+        # print('img2', img.dtype)
+
+        img_shape = img.shape
+
+        results['img_shape'] = img_shape
+
+        # crop semantic seg
+        for key in results.get('seg_fields', []):
+            results[key] = self.crop(results[key], crop_bbox)
+
+        return results
+
+    def __repr__(self):
+        return self.__class__.__name__ + f'(crop_size={self.crop_size})'
+
+    def pixel_augmentations(self, img):
+        from PIL import Image
+        # Color jitter
+        img = self.colorjitter(Image.fromarray(img))
+
+        # Gaussian Blud (sigma between 0 and 1.5)
+        sigma = random.random() * 1.5
+        ksize = int(3.3 * sigma)
+        ksize = ksize + 1 if ksize % 2 == 0 else ksize
+        img = cv2.GaussianBlur(np.array(img), (ksize, ksize),
+                               sigmaX=sigma, sigmaY=sigma, borderType=cv2.BORDER_REFLECT_101)
+        # Gray scaling
+        logger = logging.getLogger()
+        logger.info('pixel_augmentations is successfully executed')
+
+        return img

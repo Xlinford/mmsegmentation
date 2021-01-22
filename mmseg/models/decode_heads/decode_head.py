@@ -163,11 +163,11 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
 
     @auto_fp16()
     @abstractmethod
-    def forward(self, inputs):
+    def forward(self, inputs, inputs2=None):
         """Placeholder of forward function."""
         pass
 
-    def forward_train(self, inputs, img_metas, gt_semantic_seg, train_cfg):
+    def forward_train(self, inputs, img_metas, gt_semantic_seg, train_cfg, inputs2=None):
         """Forward function for training.
         Args:
             inputs (list[Tensor]): List of multi-level img features.
@@ -183,7 +183,10 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        seg_logits = self.forward(inputs)
+        if inputs2 != None:
+            seg_logits = self.forward(inputs, inputs2)
+        else:
+            seg_logits = self.forward(inputs)
         losses = self.losses(seg_logits, gt_semantic_seg)
         return losses
 
