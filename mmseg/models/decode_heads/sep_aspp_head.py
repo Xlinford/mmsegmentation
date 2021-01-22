@@ -185,6 +185,7 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
     def forward(self, inputs, inputs2=None):
         """Forward function."""
         output = None
+        feat = None
         x = self._transform_inputs(inputs)
 
         if inputs2 is not None:
@@ -194,6 +195,9 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
             x_feat = self.mlp(x)
             x2_feat = self.mlp(x2)
             output = self.head(x2, inputs2)
+            x_feat.unsqueeze(1)
+            x2_feat.unsqueeze(2)
+            feat = torch.cat([x_feat, x2_feat], dim=1)
 
         if output is not None:
             output1 = self.head(x, inputs)
@@ -203,5 +207,8 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
         else:
             output = self.head(x, inputs)
 
-        
-        return output
+        if feat == None:
+            return output, feat
+        else:
+            return output
+
