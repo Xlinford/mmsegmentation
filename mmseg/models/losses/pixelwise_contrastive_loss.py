@@ -135,17 +135,11 @@ def mask_cross_entropy(pred,
         pred_slice, target, weight=class_weight, reduction='mean')[None]
 
 
-def pixelwise_contrastive_loss(pred, label, weight=None, reduction='mean',
+def pixelwise_contrastive_loss(feats, label, weight=None, reduction='mean',
                                avg_factor=None, class_weight=None, ignore_index=255):
     # calculate the negative logits of proposed loss function
-    def calc_neg_logits(feats, pseudo_labels, neg_feats, neg_pseudo_labels):
+    def calc_neg_logits(feats, pseudo_labels, neg_feats, neg_pseudo_labels, temp=0.1):
         pseudo_labels = pseudo_labels.unsqueeze(-1)
-
-        neg_pseudo_labels =0
-        pseudo_labels =0
-        temp=0
-        feats=0
-        neg_feats=0
 
         neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)
         # negative sampling mask (Nxb)
@@ -162,6 +156,9 @@ def pixelwise_contrastive_loss(pred, label, weight=None, reduction='mean',
     # gamma: the threshold value for positive filtering
     # temp: the temperature value
     # b: an integer to divide the loss computation into several parts
+    temp = 0.1
+    feats1 = feats[:, 0:127, :, :]
+    feats2 = feats[:, 128:-1, :, :]
     pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N)
     neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)
     # divide the negative logits computation into several parts
@@ -181,7 +178,6 @@ def pixelwise_contrastive_loss(pred, label, weight=None, reduction='mean',
     # final loss for the first crop
     loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
 
-    losses = 0
-    return losses
+    return loss1
 
 
