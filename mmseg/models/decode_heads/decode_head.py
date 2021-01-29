@@ -254,8 +254,6 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             align_corners=self.align_corners)
         feat = []
         pseudo_labels = []
-        import ipdb
-        ipdb.set_trace()
         for i in range(len(img_metas)):
             crop_region = img_metas[i]['cover_crop_box']
             feat.append(seg_logit[i, :, :, :])
@@ -279,6 +277,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         loss['loss_seg'] = self.loss_decode(
             seg_logit,
             seg_label,
+            img_metas,
             weight=seg_weight,
             ignore_index=self.ignore_index)
         # loss['acc_seg'] = accuracy(seg_logit, seg_label)

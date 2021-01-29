@@ -245,6 +245,7 @@ class PixelwiseContrastiveLoss(nn.Module):
     def forward(self,
                 feats,
                 label,
+                img_metas,
                 weight=None,
                 reduction='mean',
                 avg_factor=None,
@@ -264,7 +265,8 @@ class PixelwiseContrastiveLoss(nn.Module):
         # temp: the temperature value
         # b: an integer to divide the loss computation into several parts
         # N: overlapping region;    n: crop region
-
+        import ipdb
+        ipdb.set_trace()
         temp = 0.1
         b = 300
         gamma = 0.75
