@@ -134,11 +134,106 @@ def mask_cross_entropy(pred,
     return F.binary_cross_entropy_with_logits(
         pred_slice, target, weight=class_weight, reduction='mean')[None]
 
+class CrossEntropyLoss(nn.Module):
+    """CrossEntropyLoss.
 
-def pixelwise_contrastive_loss(feats, label, weight=None, reduction='mean',
-                               avg_factor=None, class_weight=None, ignore_index=255):
-    # calculate the negative logits of proposed loss function
-    def calc_neg_logits(feats, pseudo_labels, neg_feats, neg_pseudo_labels, temp=0.1):
+    Args:
+        use_sigmoid (bool, optional): Whether the prediction uses sigmoid
+            of softmax. Defaults to False.
+        use_mask (bool, optional): Whether to use mask cross entropy loss.
+            Defaults to False.
+        reduction (str, optional): . Defaults to 'mean'.
+            Options are "none", "mean" and "sum".
+        class_weight (list[float], optional): Weight of each class.
+            Defaults to None.
+        loss_weight (float, optional): Weight of the loss. Defaults to 1.0.
+    """
+
+    def __init__(self,
+                 use_sigmoid=False,
+                 use_mask=False,
+                 reduction='mean',
+                 class_weight=None,
+                 loss_weight=1.0):
+        super(CrossEntropyLoss, self).__init__()
+        assert (use_sigmoid is False) or (use_mask is False)
+        self.use_sigmoid = use_sigmoid
+        self.use_mask = use_mask
+        self.reduction = reduction
+        self.loss_weight = loss_weight
+        self.class_weight = class_weight
+
+        if self.use_sigmoid:
+            self.cls_criterion = binary_cross_entropy
+        elif self.use_mask:
+            self.cls_criterion = mask_cross_entropy
+        else:
+            self.cls_criterion = cross_entropy
+
+    def forward(self,
+                cls_score,
+                label,
+                weight=None,
+                avg_factor=None,
+                reduction_override=None,
+                **kwargs):
+        """Forward function."""
+        assert reduction_override in (None, 'none', 'mean', 'sum')
+        reduction = (
+            reduction_override if reduction_override else self.reduction)
+        if self.class_weight is not None:
+            class_weight = cls_score.new_tensor(self.class_weight)
+        else:
+            class_weight = None
+        loss_cls = self.loss_weight * self.cls_criterion(
+            cls_score,
+            label,
+            weight,
+            class_weight=class_weight,
+            reduction=reduction,
+            avg_factor=avg_factor,
+            **kwargs)
+        return loss_cls
+
+
+@LOSSES.register_module()
+class PixelwiseContrastiveLoss(nn.Module):
+    """CrossEntropyLoss.
+
+    Args:
+        use_sigmoid (bool, optional): Whether the prediction uses sigmoid
+            of softmax. Defaults to False.
+        use_mask (bool, optional): Whether to use mask cross entropy loss.
+            Defaults to False.
+        reduction (str, optional): . Defaults to 'mean'.
+            Options are "none", "mean" and "sum".
+        class_weight (list[float], optional): Weight of each class.
+            Defaults to None.
+        loss_weight (float, optional): Weight of the loss. Defaults to 1.0.
+    """
+    def __init__(self,
+                 use_sigmoid=False,
+                 use_mask=False,
+                 reduction='mean',
+                 class_weight=None,
+                 loss_weight=1.0):
+        super(PixelwiseContrastiveLoss, self).__init__()
+        assert (use_sigmoid is False) or (use_mask is False)
+        self.use_sigmoid = use_sigmoid
+        self.use_mask = use_mask
+        self.reduction = reduction
+        self.loss_weight = loss_weight
+        self.class_weight = class_weight
+
+        if self.use_sigmoid:
+            self.cls_criterion = binary_cross_entropy
+        elif self.use_mask:
+            self.cls_criterion = mask_cross_entropy
+        else:
+            self.cls_criterion = cross_entropy
+
+    def calc_neg_logits(self, feats, pseudo_labels, neg_feats, neg_pseudo_labels, temp=0.1):
+
         pseudo_labels = pseudo_labels.unsqueeze(-1)
 
         neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)
@@ -146,38 +241,44 @@ def pixelwise_contrastive_loss(feats, label, weight=None, reduction='mean',
         neg_mask = (pseudo_labels != neg_pseudo_labels).float()
         neg_scores = (feats @ neg_feats.T) / temp  # negative scores (Nxb)
         return (neg_mask.float() * torch.exp(neg_scores)).sum(-1)
-    # feats1: features of the overlapping region in the first crop (NxC)
-    # feats2: features of the overlapping region in the second crop (NxC)
-    # neg_feats: all selected negative features (nxC)
-    # pseudo_labels1: pseudo labels for feats1 (N)
-    # pseudo_logits1: confidence for feats1 (N)
-    # pseudo_logits2: confidence for feats2 (N)
-    # neg_pseudo_labels: pseudo labels for neg_feats (n)
-    # gamma: the threshold value for positive filtering
-    # temp: the temperature value
-    # b: an integer to divide the loss computation into several parts
-    temp = 0.1
-    feats1 = feats[:, 0:127, :, :]
-    feats2 = feats[:, 128:-1, :, :]
-    pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N)
-    neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)
-    # divide the negative logits computation into several parts
-    # in each part, only b negative samples are considered
-    for i in range((n - 1) // b + 1):
-        neg_feats_i = neg_feats[i * b:(i + 1) * b]
-        neg_pseudo_labels_i = neg_pseudo_labels[i * b:(i + 1) * b]
-        neg_logits_i = torch.utils.checkpoint.checkpoint(calc_neg_logits,
-                                                         feats1, pseudo_labels1, neg_feats_i, neg_pseudo_labels_i)
-        neg_logits += neg_logits_i
-    # compute the loss for the first crop
-    logits1 = torch.exp(pos1) / (torch.exp(pos1) + neg_logits + 1e-8)
-    loss1 = -torch.log(logits1 + 1e-8)  # (N)
-    dir_mask1 = (pseudo_logits1 < pseudo_logits2)  # directional mask (N)
-    pos_mask1 = (pseudo_logits2 > gamma)  # positive filtering mask (N)
-    mask1 = (dir_mask1 * pos_mask1).float()
-    # final loss for the first crop
-    loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
 
-    return loss1
+    def forward(self, feats, label, weight=None, reduction='mean',
+                                   avg_factor=None, class_weight=None, ignore_index=255):
+        """Forward function."""
+        # calculate the negative logits of proposed loss function
+
+        # feats1: features of the overlapping region in the first crop (NxC)
+        # feats2: features of the overlapping region in the second crop (NxC)
+        # neg_feats: all selected negative features (nxC)
+        # pseudo_labels1: pseudo labels for feats1 (N)
+        # pseudo_logits1: confidence for feats1 (N)
+        # pseudo_logits2: confidence for feats2 (N)
+        # neg_pseudo_labels: pseudo labels for neg_feats (n)
+        # gamma: the threshold value for positive filtering
+        # temp: the temperature value
+        # b: an integer to divide the loss computation into several parts
+        temp = 0.1
+        feats1 = feats[:, 0:127, :, :]
+        feats2 = feats[:, 128:-1, :, :]
+        pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N)
+        neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)
+        # divide the negative logits computation into several parts
+        # in each part, only b negative samples are considered
+        for i in range((n - 1) // b + 1):
+            neg_feats_i = neg_feats[i * b:(i + 1) * b]
+            neg_pseudo_labels_i = neg_pseudo_labels[i * b:(i + 1) * b]
+            neg_logits_i = torch.utils.checkpoint.checkpoint(calc_neg_logits,
+                                                             feats1, pseudo_labels1, neg_feats_i, neg_pseudo_labels_i)
+            neg_logits += neg_logits_i
+        # compute the loss for the first crop
+        logits1 = torch.exp(pos1) / (torch.exp(pos1) + neg_logits + 1e-8)
+        loss1 = -torch.log(logits1 + 1e-8)  # (N)
+        dir_mask1 = (pseudo_logits1 < pseudo_logits2)  # directional mask (N)
+        pos_mask1 = (pseudo_logits2 > gamma)  # positive filtering mask (N)
+        mask1 = (dir_mask1 * pos_mask1).float()
+        # final loss for the first crop
+        loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
+
+        return loss1
 
 
