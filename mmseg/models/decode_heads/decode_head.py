@@ -264,6 +264,8 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         for i in range(len(seg_logit)-1):
             seg_logit = torch.cat((seg_logit, feat[i + 1]), dim=0)
             seg_label = torch.cat((seg_label, pseudo_labels[i + 1]), dim=0)
+        import ipdb
+        ipdb.set_trace()
 
         if self.sampler is not None:
             seg_weight = self.sampler.sample(seg_logit, seg_label)
