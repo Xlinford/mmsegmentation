@@ -261,11 +261,14 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             feat.append(seg_logit[i, :, :, :])
             pseudo_labels.append(seg_label[i, :, :, :])
             feat[i], pseudo_labels[i] = corner_crop(crop_region, feat[i], pseudo_labels[i])
-        seg_logit = feat[0]
-        seg_label = pseudo_labels[0]
-        for i in range(len(seg_logit)-1):
-            seg_logit = torch.cat((seg_logit, feat[i + 1]), dim=0)
-            seg_label = torch.cat((seg_label, pseudo_labels[i + 1]), dim=0)
+
+        seg_logit = feat
+        seg_label = pseudo_labels
+        # seg_logit = feat[0]
+        # seg_label = pseudo_labels[0]
+        # for i in range(len(seg_logit)-1):
+        #     seg_logit = torch.cat((seg_logit, feat[i + 1]), dim=0)
+        #     seg_label = torch.cat((seg_label, pseudo_labels[i + 1]), dim=0)
 
 
         if self.sampler is not None:

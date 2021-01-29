@@ -36,17 +36,17 @@ def corner_crop(crop_region,
     feats_crop = []
     labels_crop = []
     for i in range(repeat_times):
-        feat_one = feat[:, 128*i:(128*(i+1)), :, :]
-        pseudo_label_one = pseudo_labels[:, 21*i:(21*(i+1)), :, :]
+        feat_one = feat[128*i:(128*(i+1)), :, :]
+        pseudo_label_one = pseudo_labels[21*i:(21*(i+1)), :, :]
         crop_y1, crop_y2, crop_x1, crop_x2 = crop_region[i]
-        feats_crop.append(feat_one[:, :, crop_y1:crop_y2, crop_x1:crop_x2])
-        labels_crop.append(pseudo_label_one[:, :, crop_y1:crop_y2, crop_x1:crop_x2])
+        feats_crop.append(feat_one[:, crop_y1:crop_y2, crop_x1:crop_x2])
+        labels_crop.append(pseudo_label_one[:, crop_y1:crop_y2, crop_x1:crop_x2])
     feats_return = feats_crop[0]
     labels_return = labels_crop[0]
 
     for i in range(len(feats_crop)-1):
-        feats_return = torch.cat((feats_return, feats_crop[i+1]), dim=1)
-        labels_return = torch.cat((labels_return, labels_crop[i+1]), dim=1)
+        feats_return = torch.cat((feats_return, feats_crop[i+1]), dim=0)
+        labels_return = torch.cat((labels_return, labels_crop[i+1]), dim=0)
 
     return feats_return, labels_return
 
