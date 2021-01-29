@@ -254,6 +254,8 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             align_corners=self.align_corners)
         feat = []
         pseudo_labels = []
+        import ipdb
+        ipdb.set_trace()
         for i in range(len(img_metas)):
             crop_region = img_metas[i]['cover_crop_box']
             feat.append(seg_logit[i, :, :, :])
@@ -264,8 +266,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         for i in range(len(seg_logit)-1):
             seg_logit = torch.cat((seg_logit, feat[i + 1]), dim=0)
             seg_label = torch.cat((seg_label, pseudo_labels[i + 1]), dim=0)
-        import ipdb
-        ipdb.set_trace()
+
 
         if self.sampler is not None:
             seg_weight = self.sampler.sample(seg_logit, seg_label)

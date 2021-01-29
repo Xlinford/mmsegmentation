@@ -57,7 +57,6 @@ class ToTensor(object):
 
         for key in self.keys:
             results[key] = to_tensor(results[key])
-        print(f'ToTensor self.keys: {self.keys}')
         return results
 
     def __repr__(self):
