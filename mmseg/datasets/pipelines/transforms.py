@@ -405,7 +405,7 @@ class Normalize(object):
                                           self.to_rgb)
         if 'img2' in results:
             results['img2'] = mmcv.imnormalize(results['img2'], self.mean, self.std,
-                                              self.to_rgb)
+                                               self.to_rgb)
             # sys.exit('ppppp')
         results['img_norm_cfg'] = dict(
             mean=self.mean, std=self.std, to_rgb=self.to_rgb)
@@ -504,7 +504,7 @@ class CLAHE(object):
 
     def __repr__(self):
         repr_str = self.__class__.__name__
-        repr_str += f'(clip_limit={self.clip_limit}, '\
+        repr_str += f'(clip_limit={self.clip_limit}, ' \
                     f'tile_grid_size={self.tile_grid_size})'
         return repr_str
 
@@ -734,7 +734,7 @@ class AdjustGamma(object):
         assert gamma > 0
         self.gamma = gamma
         inv_gamma = 1.0 / gamma
-        self.table = np.array([(i / 255.0)**inv_gamma * 255
+        self.table = np.array([(i / 255.0) ** inv_gamma * 255
                                for i in np.arange(256)]).astype('uint8')
 
     def __call__(self, results):
@@ -857,8 +857,8 @@ class PhotoMetricDistortion(object):
         if random.randint(2):
             img = mmcv.bgr2hsv(img)
             img[:, :,
-                0] = (img[:, :, 0].astype(int) +
-                      random.randint(-self.hue_delta, self.hue_delta)) % 180
+            0] = (img[:, :, 0].astype(int) +
+                  random.randint(-self.hue_delta, self.hue_delta)) % 180
             img = mmcv.hsv2bgr(img)
         return img
 
@@ -955,6 +955,34 @@ class RandomMIOUCrop(object):
         check = a and b and c
         return check
 
+    def get_crop_corner(self, cover_crop_box):
+        """Get position of two overlapping crop patch
+
+        Args:
+            cover_crop_box(list): list like (delta_y,delta_x), indicate the
+                deviation of two crop box
+
+        Returns:
+            list: position of overlapping region of two crop image
+        """
+        h, w = self.crop_size
+        delta_y, delta_x = cover_crop_box
+        if delta_y > 0:
+            if delta_x > 0:
+                corner_position1 = [delta_y, h, delta_x, w]
+                corner_position2 = [0, h-delta_y, 0, w-delta_x]
+            else:
+                corner_position1 = [delta_y, h, 0, w+delta_x]
+                corner_position2 = [0, h-delta_y, -delta_x, w]
+        else:
+            if delta_x > 0:
+                corner_position1 = [0, h+delta_y, delta_x, w]
+                corner_position2 = [-delta_y, h, 0, w-delta_x]
+            else:
+                corner_position1 = [0, h+delta_y, 0, w+delta_x]
+                corner_position2 = [-delta_y, h, -delta_x, w]
+        return corner_position1, corner_position2
+
     def get_crop_bbox(self, img):
         """Randomly get a crop bounding box."""
         # cover_region = self.MIOU_crop_ratio()
@@ -975,8 +1003,10 @@ class RandomMIOUCrop(object):
         crop_1 = np.array([crop_1y1, crop_1y2, crop_1x1, crop_1x2])
         crop_check = False
         crop_2 = crop_1
+        offset_corner_y = 0
+        offset_corner_x = 0
 
-        while crop_check == False:
+        while not crop_check:
             offset_corner_y = int((np.random.random() * 2 - 1.0) * self.crop_size[0])
             offset_corner_x = int((np.random.random() * 2 - 1.0) * self.crop_size[1])
             corner_y = np.array([offset_corner_y, offset_corner_y, 0, 0])
@@ -990,8 +1020,7 @@ class RandomMIOUCrop(object):
 
             crop_check = self.crop_region_check(offset_corner_y, offset_corner_x, crop_2, img)
 
-
-        return crop_1, crop_2
+        return crop_1, crop_2, [offset_corner_y, offset_corner_x]
 
     def crop(self, img, crop_bbox):
         """Crop from ``img``"""
@@ -1011,8 +1040,7 @@ class RandomMIOUCrop(object):
         """
 
         img_origin = results['img']
-        crop_bbox, crop_bbox2 = self.get_crop_bbox(img_origin)
-
+        crop_bbox, crop_bbox2, cover_crop_box = self.get_crop_bbox(img_origin)
 
         # sys.exit('1')
 
@@ -1028,8 +1056,10 @@ class RandomMIOUCrop(object):
         # print('img2', img.dtype)
 
         img_shape = img.shape
+        corner_position1, corner_position2 = self.get_crop_corner(cover_crop_box)
 
         results['img_shape'] = img_shape
+        results['cover_crop_box'] = [corner_position1, corner_position2]
 
         # crop semantic seg
         for key in results.get('seg_fields', []):

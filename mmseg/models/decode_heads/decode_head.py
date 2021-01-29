@@ -6,7 +6,7 @@ from mmcv.cnn import normal_init
 from mmcv.runner import auto_fp16, force_fp32
 
 from mmseg.core import build_pixel_sampler
-from mmseg.ops import resize
+from mmseg.ops import resize, corner_crop
 from ..builder import build_loss
 from ..losses import accuracy
 
@@ -185,7 +185,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         """
         if inputs2 != None:
             seg_logits, gt_semantic_seg = self.forward(inputs, inputs2)
-            losses = self.contrastive_losses(seg_logits, gt_semantic_seg)
+            losses = self.contrastive_losses(seg_logits, gt_semantic_seg, img_metas)
 
         else:
             seg_logits = self.forward(inputs)
@@ -239,23 +239,42 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         return loss
 
     @force_fp32(apply_to=('seg_logit', 'seg_label'))
-    def contrastive_losses(self, seg_logit, seg_label):
+    def contrastive_losses(self, seg_logit, seg_label, img_metas):
         """Compute pixel-wise contrastive loss."""
         loss = dict()
         seg_logit = resize(
             input=seg_logit,
-            size=seg_label.shape[2:],
+            size=img_metas[0]['img_shape'][:2],
             mode='bilinear',
             align_corners=self.align_corners)
+        seg_label = resize(
+            input=seg_label,
+            size=img_metas[0]['img_shape'][:2],
+            mode='bilinear',
+            align_corners=self.align_corners)
+        feat = []
+        pseudo_labels = []
+        for i in range(len(img_metas)):
+            crop_region = img_metas[i]['cover_crop_box']
+            feat[i] = seg_logit[i, :, :, :]
+            pseudo_labels[i] = seg_label[i, :, :, :]
+            feat[i], pseudo_labels[i] = corner_crop(crop_region, feat[i], pseudo_labels[i])
+        seg_logit = feat[0]
+        seg_label = pseudo_labels[0]
+        for i in range(len(seg_logit)-1):
+            seg_logit = torch.cat((seg_logit, feat[i + 1]), dim=0)
+            seg_label = torch.cat((seg_label, pseudo_labels[i + 1]), dim=0)
+
         if self.sampler is not None:
             seg_weight = self.sampler.sample(seg_logit, seg_label)
         else:
             seg_weight = None
-        seg_label = seg_label.squeeze(1)
+        # seg_label = seg_label.squeeze(1)
         loss['loss_seg'] = self.loss_decode(
             seg_logit,
             seg_label,
             weight=seg_weight,
             ignore_index=self.ignore_index)
-        loss['acc_seg'] = accuracy(seg_logit, seg_label)
+        # loss['acc_seg'] = accuracy(seg_logit, seg_label)
+        loss['acc_seg'] = 0.5
         return loss

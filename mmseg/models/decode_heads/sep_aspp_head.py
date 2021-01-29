@@ -190,8 +190,6 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
 
         if inputs2 is not None:
             x2 = self._transform_inputs(inputs2)
-            import ipdb
-            ipdb.set_trace()
             x_feat = self.mlp(x)
             x2_feat = self.mlp(x2)
             output = self.head(x2, inputs2)
@@ -206,6 +204,8 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
             output = torch.cat([output1, output], dim=1)
         else:
             output = self.head(x, inputs)
+            import ipdb
+            ipdb.set_trace()
 
         if feat is not None:
             return feat, output

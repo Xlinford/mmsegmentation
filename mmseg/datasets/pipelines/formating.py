@@ -287,6 +287,8 @@ class Collect(object):
         img_meta = {}
         for key in self.meta_keys:
             img_meta[key] = results[key]
+        if results['cover_crop_box'] is not None:
+            img_meta['cover_crop_box'] = results['cover_crop_box']
         data['img_metas'] = DC(img_meta, cpu_only=True)
         for key in self.keys:
             data[key] = results[key]
