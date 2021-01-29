@@ -242,8 +242,14 @@ class PixelwiseContrastiveLoss(nn.Module):
         neg_scores = (feats @ neg_feats.T) / temp  # negative scores (Nxb)
         return (neg_mask.float() * torch.exp(neg_scores)).sum(-1)
 
-    def forward(self, feats, label, weight=None, reduction='mean',
-                                   avg_factor=None, class_weight=None, ignore_index=255):
+    def forward(self,
+                feats,
+                label,
+                weight=None,
+                reduction='mean',
+                avg_factor=None,
+                class_weight=None,
+                ignore_index=255):
         """Forward function."""
         # calculate the negative logits of proposed loss function
 
@@ -257,27 +263,36 @@ class PixelwiseContrastiveLoss(nn.Module):
         # gamma: the threshold value for positive filtering
         # temp: the temperature value
         # b: an integer to divide the loss computation into several parts
+        # N: overlapping region;    n: crop region
+
         temp = 0.1
-        feats1 = feats[:, 0:127, :, :]
-        feats2 = feats[:, 128:-1, :, :]
-        pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N)
-        neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)
-        # divide the negative logits computation into several parts
-        # in each part, only b negative samples are considered
-        for i in range((n - 1) // b + 1):
-            neg_feats_i = neg_feats[i * b:(i + 1) * b]
-            neg_pseudo_labels_i = neg_pseudo_labels[i * b:(i + 1) * b]
-            neg_logits_i = torch.utils.checkpoint.checkpoint(calc_neg_logits,
-                                                             feats1, pseudo_labels1, neg_feats_i, neg_pseudo_labels_i)
-            neg_logits += neg_logits_i
-        # compute the loss for the first crop
-        logits1 = torch.exp(pos1) / (torch.exp(pos1) + neg_logits + 1e-8)
-        loss1 = -torch.log(logits1 + 1e-8)  # (N)
-        dir_mask1 = (pseudo_logits1 < pseudo_logits2)  # directional mask (N)
-        pos_mask1 = (pseudo_logits2 > gamma)  # positive filtering mask (N)
-        mask1 = (dir_mask1 * pos_mask1).float()
-        # final loss for the first crop
-        loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
+        b = 300
+        gamma = 0.75
+        for j in range(len(feats)):
+            feats1 = feats[j][0:127, :, :]
+            feats2 = feats[j][128:-1, :, :]
+            pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N)
+            neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)
+            # divide the negative logits computation into several parts
+            # in each part, only b negative samples are considered
+            for i in range((n - 1) // b + 1):
+                neg_feats_i = neg_feats[i * b:(i + 1) * b]
+                neg_pseudo_labels_i = neg_pseudo_labels[i * b:(i + 1) * b]
+                neg_logits_i = torch.utils.checkpoint.checkpoint(
+                    self.calc_neg_logits,
+                    feats1,
+                    pseudo_labels1,
+                    neg_feats_i,
+                    neg_pseudo_labels_i)
+                neg_logits += neg_logits_i
+            # compute the loss for the first crop
+            logits1 = torch.exp(pos1) / (torch.exp(pos1) + neg_logits + 1e-8)
+            loss1 = -torch.log(logits1 + 1e-8)  # (N)
+            dir_mask1 = (pseudo_logits1 < pseudo_logits2)  # directional mask (N)
+            pos_mask1 = (pseudo_logits2 > gamma)  # positive filtering mask (N)
+            mask1 = (dir_mask1 * pos_mask1).float()
+            # final loss for the first crop
+            loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
 
         return loss1
 
