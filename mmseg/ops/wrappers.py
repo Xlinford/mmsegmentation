@@ -39,8 +39,8 @@ def corner_crop(crop_region,
         feat_one = feat[:, 128*i:(128*(i+1)), :, :]
         pseudo_label_one = pseudo_labels[:, 21*i:(21*(i+1)), :, :]
         crop_y1, crop_y2, crop_x1, crop_x2 = crop_region[i]
-        feats_crop[i] = feat_one[:, :, crop_y1:crop_y2, crop_x1:crop_x2]
-        labels_crop[i] = pseudo_label_one[:, :, crop_y1:crop_y2, crop_x1:crop_x2]
+        feats_crop.append(feat_one[:, :, crop_y1:crop_y2, crop_x1:crop_x2])
+        labels_crop.append(pseudo_label_one[:, :, crop_y1:crop_y2, crop_x1:crop_x2])
     feats_return = feats_crop[0]
     labels_return = labels_crop[0]
 

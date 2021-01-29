@@ -256,8 +256,8 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         pseudo_labels = []
         for i in range(len(img_metas)):
             crop_region = img_metas[i]['cover_crop_box']
-            feat[i] = seg_logit[i, :, :, :]
-            pseudo_labels[i] = seg_label[i, :, :, :]
+            feat.append(seg_logit[i, :, :, :])
+            pseudo_labels.append(seg_label[i, :, :, :])
             feat[i], pseudo_labels[i] = corner_crop(crop_region, feat[i], pseudo_labels[i])
         seg_logit = feat[0]
         seg_label = pseudo_labels[0]
