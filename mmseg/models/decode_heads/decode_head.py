@@ -252,16 +252,16 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             size=img_metas[0]['img_shape'][:2],
             mode='bilinear',
             align_corners=self.align_corners)
-        feat = []
-        pseudo_labels = []
-        for i in range(len(img_metas)):
-            crop_region = img_metas[i]['cover_crop_box']
-            feat.append(seg_logit[i, :, :, :])
-            pseudo_labels.append(seg_label[i, :, :, :])
-            feat[i], pseudo_labels[i] = corner_crop(crop_region, feat[i], pseudo_labels[i])
-
-        seg_logit = feat
-        seg_label = pseudo_labels
+        # feat = []
+        # pseudo_labels = []
+        # for i in range(len(img_metas)):
+        #     crop_region = img_metas[i]['cover_crop_box']
+        #     feat.append(seg_logit[i, :, :, :])
+        #     pseudo_labels.append(seg_label[i, :, :, :])
+        #     feat[i], pseudo_labels[i] = corner_crop(crop_region, feat[i], pseudo_labels[i])
+        #
+        # seg_logit = feat
+        # seg_label = pseudo_labels
         # seg_logit = feat[0]
         # seg_label = pseudo_labels[0]
         # for i in range(len(seg_logit)-1):

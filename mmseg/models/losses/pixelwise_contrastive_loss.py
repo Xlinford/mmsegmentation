@@ -4,6 +4,7 @@ import torch.nn.functional as F
 
 from ..builder import LOSSES
 from .utils import weight_reduce_loss
+from mmseg.ops import corner_crop
 
 
 def cross_entropy(pred,
@@ -134,6 +135,7 @@ def mask_cross_entropy(pred,
     return F.binary_cross_entropy_with_logits(
         pred_slice, target, weight=class_weight, reduction='mean')[None]
 
+
 class CrossEntropyLoss(nn.Module):
     """CrossEntropyLoss.
 
@@ -211,6 +213,7 @@ class PixelwiseContrastiveLoss(nn.Module):
             Defaults to None.
         loss_weight (float, optional): Weight of the loss. Defaults to 1.0.
     """
+
     def __init__(self,
                  use_sigmoid=False,
                  use_mask=False,
@@ -232,6 +235,32 @@ class PixelwiseContrastiveLoss(nn.Module):
         else:
             self.cls_criterion = cross_entropy
 
+    def feature_prepare(self, seg_logit, seg_label, img_metas):
+        """Crop features
+
+        Crop features like [batch, channel, cropsize, cropsize] witch have overlapping region into overlapping size[y, x]
+        Args:
+            seg_logit: tensor, features from encoder [B, C, H, W], [H, W] is crop size
+            seg_label: tensor, logit from last layer [B, C, H, W], C is class number
+            img_metas: dict, from data enhancement process record
+
+        Returns:
+            seg_logit: list, length = Batch, size like [C, y, x]
+            seg_label: list, length = Batch, size like [C, y, x]
+        """
+
+        feat = []
+        pseudo_labels = []
+        for i in range(len(img_metas)):
+            crop_region = img_metas[i]['cover_crop_box']
+            feat.append(seg_logit[i, :, :, :])
+            pseudo_labels.append(seg_label[i, :, :, :])
+            feat[i], pseudo_labels[i] = corner_crop(crop_region, feat[i], pseudo_labels[i])
+
+        seg_logit = feat
+        seg_label = pseudo_labels
+        return seg_logit, seg_label
+
     def calc_neg_logits(self, feats, pseudo_labels, neg_feats, neg_pseudo_labels, temp=0.1):
 
         pseudo_labels = pseudo_labels.unsqueeze(-1)
@@ -244,7 +273,7 @@ class PixelwiseContrastiveLoss(nn.Module):
 
     def forward(self,
                 feats,
-                label,
+                pseudo_logits,
                 img_metas,
                 weight=None,
                 reduction='mean',
@@ -254,38 +283,51 @@ class PixelwiseContrastiveLoss(nn.Module):
         """Forward function."""
         # calculate the negative logits of proposed loss function
 
-        # feats1: features of the overlapping region in the first crop (NxC)
-        # feats2: features of the overlapping region in the second crop (NxC)
-        # neg_feats: all selected negative features (nxC)
+        # feats1: features of the overlapping region in the first crop (NxC)....
+        # feats2: features of the overlapping region in the second crop (NxC)....
+        # neg_feats: all selected negative features (nxC)....
         # pseudo_labels1: pseudo labels for feats1 (N)
-        # pseudo_logits1: confidence for feats1 (N)
-        # pseudo_logits2: confidence for feats2 (N)
+        # pseudo_logits1: confidence for feats1 (N)....
+        # pseudo_logits2: confidence for feats2 (N)....
         # neg_pseudo_labels: pseudo labels for neg_feats (n)
         # gamma: the threshold value for positive filtering
         # temp: the temperature value
         # b: an integer to divide the loss computation into several parts
         # N: overlapping region;    n: crop region
+
+        temp = 0.1
+        b = 299
+        gamma = 0.75
+        n = img_metas[1]['crop_size']
+        n = n[0]*n[1]
+        loss2 = 0
+
+        pos_feats, pos_pseudo_labels = self.feature_prepare(feats, pseudo_logits, img_metas)
         import ipdb
         ipdb.set_trace()
-        temp = 0.1
-        b = 300
-        gamma = 0.75
-        for j in range(len(feats)):
-            feats1 = feats[j][0:127, :, :]
-            feats2 = feats[j][128:-1, :, :]
+        for j in range(len(pos_feats)):
+            feats1 = torch.reshape(pos_feats[j][0:127, :, :], (128, -1))
+            feats2 = torch.reshape(pos_feats[j][128:-1, :, :], (128, -1))
+            neg_feats = torch.reshape(feats[j, 0:127, :, :], (128, -1))    # change dim
+            pseudo_logits1 = pos_pseudo_labels[j][0:20, :, :]
+            pseudo_logits2 = pos_pseudo_labels[j][21:-1, :, :]
+            pseudo_labels1 = torch.reshape(F.log_softmax(pseudo_logits1, dim=0), (1, -1))
+            # pseudo_logits-->[B,C,H,W] pos_pseudo_labels1-->[1,H,W]
+            neg_pseudo_labels1 = F.log_softmax(torch.squeeze(pseudo_logits[j, 0:20, :, :], dim=0), dim=0)
+            neg_pseudo_labels1 = torch.reshape(neg_pseudo_labels1, (1, -1))
             pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N)
             neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)
             # divide the negative logits computation into several parts
             # in each part, only b negative samples are considered
             for i in range((n - 1) // b + 1):
-                neg_feats_i = neg_feats[i * b:(i + 1) * b]
-                neg_pseudo_labels_i = neg_pseudo_labels[i * b:(i + 1) * b]
+                neg_feats_i = neg_feats[:, i * b:(i + 1) * b]
+                neg_pseudo_labels_i = neg_pseudo_labels1[:, i * b:(i + 1) * b]
                 neg_logits_i = torch.utils.checkpoint.checkpoint(
                     self.calc_neg_logits,
-                    feats1,
-                    pseudo_labels1,
-                    neg_feats_i,
-                    neg_pseudo_labels_i)
+                    feats1,                 # [128,h*w]
+                    pseudo_labels1,         # [1,h*w]
+                    neg_feats_i,            # [128,b]
+                    neg_pseudo_labels_i)    # [1,b]
                 neg_logits += neg_logits_i
             # compute the loss for the first crop
             logits1 = torch.exp(pos1) / (torch.exp(pos1) + neg_logits + 1e-8)
@@ -295,7 +337,6 @@ class PixelwiseContrastiveLoss(nn.Module):
             mask1 = (dir_mask1 * pos_mask1).float()
             # final loss for the first crop
             loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
+            loss2 += loss1
 
-        return loss1
-
-
+        return loss2
