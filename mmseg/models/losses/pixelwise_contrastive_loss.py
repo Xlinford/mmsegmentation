@@ -298,7 +298,7 @@ class PixelwiseContrastiveLoss(nn.Module):
         temp = 0.1
         b = 299
         gamma = 0.75
-        n = img_metas[1]['crop_size']
+        n = img_metas[1]['img_shape']
         n = n[0]*n[1]
         loss2 = 0
 
