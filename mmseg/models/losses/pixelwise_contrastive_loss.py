@@ -263,6 +263,8 @@ class PixelwiseContrastiveLoss(nn.Module):
 
     def calc_neg_logits(self, feats, pseudo_labels, neg_feats, neg_pseudo_labels, temp=0.1):
 
+        import ipdb
+        ipdb.set_trace()
         pseudo_labels = pseudo_labels.unsqueeze(-1)
 
         neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)
@@ -301,8 +303,7 @@ class PixelwiseContrastiveLoss(nn.Module):
         n = img_metas[1]['img_shape']
         n = n[0]*n[1]
         loss2 = 0
-        import ipdb
-        ipdb.set_trace()
+
         pos_feats, pos_pseudo_labels = self.feature_prepare(feats, pseudo_logits, img_metas)
 
         for j in range(len(pos_feats)):
