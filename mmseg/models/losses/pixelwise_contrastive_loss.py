@@ -301,10 +301,10 @@ class PixelwiseContrastiveLoss(nn.Module):
         n = img_metas[1]['img_shape']
         n = n[0]*n[1]
         loss2 = 0
-
-        pos_feats, pos_pseudo_labels = self.feature_prepare(feats, pseudo_logits, img_metas)
         import ipdb
         ipdb.set_trace()
+        pos_feats, pos_pseudo_labels = self.feature_prepare(feats, pseudo_logits, img_metas)
+
         for j in range(len(pos_feats)):
             feats1 = torch.reshape(pos_feats[j][0:127, :, :], (128, -1))
             feats2 = torch.reshape(pos_feats[j][128:-1, :, :], (128, -1))
