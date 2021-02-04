@@ -76,8 +76,7 @@ class PixelwiseContrastiveLoss(nn.Module):
         Returns:
 
         """
-        import ipdb
-        ipdb.set_trace()
+
         pseudo_labels = pseudo_labels.permute(1, 0)     # [h*w,1]
         # neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)  # [1,b]
         # negative sampling mask (Nxb)
@@ -151,5 +150,7 @@ class PixelwiseContrastiveLoss(nn.Module):
             # final loss for the first crop
             loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
             loss2 += loss1
+            import ipdb
+            ipdb.set_trace()
 
         return loss2
