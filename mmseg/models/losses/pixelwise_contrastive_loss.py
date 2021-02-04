@@ -322,9 +322,9 @@ class PixelwiseContrastiveLoss(nn.Module):
             neg_feats = torch.reshape(feats[j, 0:128, :, :], (128, -1))    # change dim
             pseudo_logits1 = pos_pseudo_labels[j][0:21, :, :]
             pseudo_logits2 = pos_pseudo_labels[j][20:-1, :, :]
-            pseudo_labels1 = torch.reshape(F.log_softmax(pseudo_logits1, dim=0), (1, -1))
+            pseudo_labels1 = torch.reshape(torch.argmax(pseudo_logits1, dim=0), (1, -1))
             # pseudo_logits-->[B,C,H,W] pos_pseudo_labels1-->[1,H,W]
-            neg_pseudo_labels1 = F.log_softmax(torch.squeeze(pseudo_logits[j, 0:21, :, :], dim=0), dim=0)
+            neg_pseudo_labels1 = torch.argmax(torch.squeeze(pseudo_logits[j, 0:21, :, :], dim=0), dim=0)
             neg_pseudo_labels1 = torch.reshape(neg_pseudo_labels1, (1, -1))
             pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N) 128
             neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)128
