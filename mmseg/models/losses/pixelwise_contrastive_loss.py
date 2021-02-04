@@ -262,16 +262,26 @@ class PixelwiseContrastiveLoss(nn.Module):
         return seg_logit, seg_label
 
     def calc_neg_logits(self, feats, pseudo_labels, neg_feats, neg_pseudo_labels, temp=0.1):
+        """calculate negative feature pair
 
+        Args:
+            feats: [128,h*w]
+            pseudo_labels: [1,h*w]
+            neg_feats: [128,b]
+            neg_pseudo_labels: [1,b]
+            temp: 0.1
+
+        Returns:
+
+        """
         import ipdb
         ipdb.set_trace()
-        pseudo_labels = pseudo_labels.unsqueeze(-1)
-
-        neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)
+        pseudo_labels = pseudo_labels.permute(1, 0)     # [h*w,1]
+        # neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)  # [1,1,b]
         # negative sampling mask (Nxb)
         neg_mask = (pseudo_labels != neg_pseudo_labels).float()
         neg_scores = (feats.T @ neg_feats) / temp  # negative scores (Nxb)
-        return (neg_mask.float() * torch.exp(neg_scores)).sum(-1)
+        return (neg_mask.float() * torch.exp(neg_scores)).sum(0)
 
     def forward(self,
                 feats,
@@ -316,8 +326,8 @@ class PixelwiseContrastiveLoss(nn.Module):
             # pseudo_logits-->[B,C,H,W] pos_pseudo_labels1-->[1,H,W]
             neg_pseudo_labels1 = F.log_softmax(torch.squeeze(pseudo_logits[j, 0:21, :, :], dim=0), dim=0)
             neg_pseudo_labels1 = torch.reshape(neg_pseudo_labels1, (1, -1))
-            pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N)
-            neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)
+            pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N) 128
+            neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)128
             import ipdb
             ipdb.set_trace()
             # divide the negative logits computation into several parts
