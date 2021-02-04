@@ -270,7 +270,7 @@ class PixelwiseContrastiveLoss(nn.Module):
         neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)
         # negative sampling mask (Nxb)
         neg_mask = (pseudo_labels != neg_pseudo_labels).float()
-        neg_scores = (feats @ neg_feats.T) / temp  # negative scores (Nxb)
+        neg_scores = (feats.T @ neg_feats) / temp  # negative scores (Nxb)
         return (neg_mask.float() * torch.exp(neg_scores)).sum(-1)
 
     def forward(self,
@@ -298,7 +298,7 @@ class PixelwiseContrastiveLoss(nn.Module):
         # N: overlapping region;    n: crop region
 
         temp = 0.1
-        b = 299
+        b = 300
         gamma = 0.75
         n = img_metas[1]['img_shape']
         n = n[0]*n[1]
@@ -318,6 +318,8 @@ class PixelwiseContrastiveLoss(nn.Module):
             neg_pseudo_labels1 = torch.reshape(neg_pseudo_labels1, (1, -1))
             pos1 = (feats1 * feats2.detach()).sum(-1) / temp  # positive scores (N)
             neg_logits = torch.zeros(pos1.size(0))  # initialize negative scores (n)
+            import ipdb
+            ipdb.set_trace()
             # divide the negative logits computation into several parts
             # in each part, only b negative samples are considered
             for i in range((n - 1) // b + 1):
