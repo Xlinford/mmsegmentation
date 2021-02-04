@@ -77,7 +77,7 @@ class PixelwiseContrastiveLoss(nn.Module):
 
         """
 
-        pseudo_labels = pseudo_labels.permute(1, 0)     # [h*w,1]
+        pseudo_labels = pseudo_labels.permute(1, 0)  # [h*w,1]
         # neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)  # [1,b]
         # negative sampling mask (Nxb)
         neg_mask = (pseudo_labels != neg_pseudo_labels).float()
@@ -112,15 +112,15 @@ class PixelwiseContrastiveLoss(nn.Module):
         b = 300
         gamma = 0.75
         n = img_metas[1]['img_shape']
-        n = n[0]*n[1]
-        loss2 = []
+        n = n[0] * n[1]
+        loss2 = 0
 
         pos_feats, pos_pseudo_labels = self.feature_prepare(feats, pseudo_logits, img_metas)
 
         for j in range(len(pos_feats)):
             feats1 = torch.reshape(pos_feats[j][0:128, :, :], (128, -1))
             feats2 = torch.reshape(pos_feats[j][127:-1, :, :], (128, -1))
-            neg_feats = torch.reshape(feats[j, 0:128, :, :], (128, -1))    # change dim
+            neg_feats = torch.reshape(feats[j, 0:128, :, :], (128, -1))  # change dim
             pseudo_logits1 = pos_pseudo_labels[j][0:21, :, :]
             pseudo_logits2 = pos_pseudo_labels[j][20:-1, :, :]
             pseudo_labels1 = torch.reshape(torch.argmax(pseudo_logits1, dim=0), (1, -1))
@@ -136,22 +136,24 @@ class PixelwiseContrastiveLoss(nn.Module):
                 neg_pseudo_labels_i = neg_pseudo_labels1[:, i * b:(i + 1) * b]
                 neg_logits_i = torch.utils.checkpoint.checkpoint(
                     self.calc_neg_logits,
-                    feats1,                 # [128,h*w]
-                    pseudo_labels1,         # [1,h*w]
-                    neg_feats_i,            # [128,b]
-                    neg_pseudo_labels_i)    # [1,b]
+                    feats1,  # [128,h*w]
+                    pseudo_labels1,  # [1,h*w]
+                    neg_feats_i,  # [128,b]
+                    neg_pseudo_labels_i)  # [1,b]
                 neg_logits += neg_logits_i
             # compute the loss for the first crop
             logits1 = torch.exp(pos1) / (torch.exp(pos1) + neg_logits + 1e-8)
             loss1 = -torch.log(logits1 + 1e-8)  # (N)
             dir_mask1 = (pseudo_logits1 < pseudo_logits2)  # directional mask (N)
             pos_mask1 = (pseudo_logits2 > gamma)  # positive filtering mask (N)
-            mask1 = (dir_mask1 * pos_mask1).float()
+            mask1 = torch.reshape(torch.argmax((dir_mask1 * pos_mask1).float(), dim=0), (1, -1)).squeeze(0)
             # final loss for the first crop
             import ipdb
             ipdb.set_trace()
             loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
-            loss2 += loss1
-
+            if j == 0:
+                loss2 = loss1
+            else:
+                loss2 += loss1
 
         return loss2
