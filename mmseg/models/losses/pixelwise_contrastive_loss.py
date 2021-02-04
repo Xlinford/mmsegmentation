@@ -114,7 +114,7 @@ class PixelwiseContrastiveLoss(nn.Module):
         gamma = 0.75
         n = img_metas[1]['img_shape']
         n = n[0]*n[1]
-        loss2 = 0
+        loss2 = []
 
         pos_feats, pos_pseudo_labels = self.feature_prepare(feats, pseudo_logits, img_metas)
 
@@ -130,8 +130,6 @@ class PixelwiseContrastiveLoss(nn.Module):
             neg_pseudo_labels1 = torch.reshape(neg_pseudo_labels1, (1, -1))
             pos1 = (feats1 * feats2.detach()).sum(0) / temp  # positive scores (N)
             neg_logits = torch.zeros(pos1.size(0), device=pos1.device)  # initialize negative scores (n)N
-            import ipdb
-            ipdb.set_trace()
             # divide the negative logits computation into several parts
             # in each part, only b negative samples are considered
             for i in range((n - 1) // b + 1):
