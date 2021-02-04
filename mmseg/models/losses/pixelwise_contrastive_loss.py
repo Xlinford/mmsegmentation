@@ -148,9 +148,10 @@ class PixelwiseContrastiveLoss(nn.Module):
             pos_mask1 = (pseudo_logits2 > gamma)  # positive filtering mask (N)
             mask1 = (dir_mask1 * pos_mask1).float()
             # final loss for the first crop
-            loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
-            loss2 += loss1
             import ipdb
             ipdb.set_trace()
+            loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
+            loss2 += loss1
+
 
         return loss2
