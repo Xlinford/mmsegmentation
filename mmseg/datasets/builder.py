@@ -43,6 +43,8 @@ def _concat_dataset(cfg, default_args=None):
     else:
         assert num_split == num_ann_dir or num_ann_dir <= 1
     num_dset = max(num_split, num_img_dir)
+    import ipdb
+    ipdb.set_trace()
 
     datasets = []
     for i in range(num_dset):
