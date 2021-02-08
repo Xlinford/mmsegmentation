@@ -62,7 +62,8 @@ class LoadImageFromFile(object):
             img_bytes, flag=self.color_type, backend=self.imdecode_backend)
         if self.to_float32:
             img = img.astype(np.float32)
-
+        import ipdb
+        ipdb.set_trace()
         results['filename'] = filename
         results['ori_filename'] = results['img_info']['filename']
         results['img'] = img
@@ -76,8 +77,7 @@ class LoadImageFromFile(object):
             mean=np.zeros(num_channels, dtype=np.float32),
             std=np.ones(num_channels, dtype=np.float32),
             to_rgb=False)
-        import ipdb
-        ipdb.set_trace()
+
         return results
 
     def __repr__(self):
