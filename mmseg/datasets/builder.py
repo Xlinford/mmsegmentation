@@ -43,8 +43,6 @@ def _concat_dataset(cfg, default_args=None):
     else:
         assert num_split == num_ann_dir or num_ann_dir <= 1
     num_dset = max(num_split, num_img_dir)
-    import ipdb
-    ipdb.set_trace()
 
     datasets = []
     for i in range(num_dset):
@@ -62,6 +60,8 @@ def _concat_dataset(cfg, default_args=None):
 
 def build_dataset(cfg, default_args=None):
     """Build datasets."""
+    import ipdb
+    ipdb.set_trace()
     from .dataset_wrappers import ConcatDataset, RepeatDataset
     if isinstance(cfg, (list, tuple)):
         dataset = ConcatDataset([build_dataset(c, default_args) for c in cfg])
