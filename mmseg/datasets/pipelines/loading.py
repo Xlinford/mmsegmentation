@@ -76,6 +76,8 @@ class LoadImageFromFile(object):
             mean=np.zeros(num_channels, dtype=np.float32),
             std=np.ones(num_channels, dtype=np.float32),
             to_rgb=False)
+        import ipdb
+        ipdb.set_trace()
         return results
 
     def __repr__(self):
