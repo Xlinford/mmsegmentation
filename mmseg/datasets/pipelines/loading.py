@@ -62,8 +62,6 @@ class LoadImageFromFile(object):
             img_bytes, flag=self.color_type, backend=self.imdecode_backend)
         if self.to_float32:
             img = img.astype(np.float32)
-        import ipdb
-        ipdb.set_trace()
         results['filename'] = filename
         results['ori_filename'] = results['img_info']['filename']
         results['img'] = img
