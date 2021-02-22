@@ -133,6 +133,11 @@ def main():
     logger.info(model)
 
     datasets = [build_dataset(cfg.data.train)]
+    import ipdb
+    ipdb.set_trace()
+    if cfg.data.semi_train is not None:
+        datasets.append([build_dataset(cfg.data.semi_train)])
+
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
         val_dataset.pipeline = cfg.data.train.pipeline
