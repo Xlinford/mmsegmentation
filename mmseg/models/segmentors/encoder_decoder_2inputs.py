@@ -145,10 +145,11 @@ class EncoderDecoder2Inputs(BaseSegmentor):
 
         return seg_logit
 
-    def forward_train(self, img, img2, img_metas, gt_semantic_seg):
+    def forward_train(self, img, img_metas, gt_semantic_seg, img2=None, ):
         """Forward function for training.
 
         Args:
+            img2 (Tensor): Input images.
             img (Tensor): Input images.
             img_metas (list[dict]): List of image info dict where each dict
                 has: 'img_shape', 'scale_factor', 'flip', and may also contain
