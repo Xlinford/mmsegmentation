@@ -133,15 +133,15 @@ def main():
     logger.info(model)
 
     datasets = [build_dataset(cfg.data.train)]
-    import ipdb
-    ipdb.set_trace()
-    if cfg.data.semi_train is not None:
-        datasets.append([build_dataset(cfg.data.semi_train)])
 
     if len(cfg.workflow) == 2:
         val_dataset = copy.deepcopy(cfg.data.val)
         val_dataset.pipeline = cfg.data.train.pipeline
         datasets.append(build_dataset(val_dataset))
+
+    if 'semi_train' in cfg.data.keys():
+        datasets.append(build_dataset(cfg.data.semi_train))
+
     if cfg.checkpoint_config is not None:
         # save mmseg version, config file content and class names in
         # checkpoints as meta data

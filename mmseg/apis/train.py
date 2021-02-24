@@ -3,6 +3,7 @@ import warnings
 
 import numpy as np
 import torch
+from itertools import cycle
 from mmcv.parallel import MMDataParallel, MMDistributedDataParallel
 from mmcv.runner import build_optimizer, build_runner
 
@@ -51,8 +52,12 @@ def train_segmentor(model,
             len(cfg.gpu_ids),
             dist=distributed,
             seed=cfg.seed,
-            drop_last=True) for ds in dataset
-    ]
+            drop_last=True) for ds in dataset]
+
+        # for i, data_batch in enumerate(data_loaders[0]):
+        #     print(type(data_batch))
+        # import ipdb
+        # ipdb.set_trace()
 
     # put model on gpus
     if distributed:
@@ -113,4 +118,10 @@ def train_segmentor(model,
         runner.resume(cfg.resume_from)
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
-    runner.run(data_loaders, cfg.workflow)
+    if 'semi_train' in cfg.data.keys():
+        max_iters = len(data_loaders[1])
+        data_loaders = [iter(zip(cycle(data_loaders[0]), data_loaders[1]))]
+        runner.run(data_loaders, cfg.workflow, max_iters=max_iters)
+    else:
+        runner.run(data_loaders, cfg.workflow)
+

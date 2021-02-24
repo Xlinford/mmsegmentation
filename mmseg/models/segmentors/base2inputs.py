@@ -149,8 +149,8 @@ class BaseSegmentor(nn.Module):
                 DDP, it means the batch size on each GPU), which is used for
                 averaging the logs.
         """
-        print(data_batch.keys())
-        # print(len(data_batch['img'].data))
+        import ipdb
+        ipdb.set_trace()
 
 
         losses = self(**data_batch)
