@@ -324,20 +324,26 @@ class Pad(object):
 
     def _pad_img(self, results):
         """Pad images according to ``self.size``."""
-        if self.size is not None:
-            padded_img = mmcv.impad(
-                results['img'], shape=self.size, pad_val=self.pad_val)
-        elif self.size_divisor is not None:
-            padded_img = mmcv.impad_to_multiple(
-                results['img'], self.size_divisor, pad_val=self.pad_val)
-        results['img'] = padded_img
-        if 'img2' in results:
+        if 'img' in results.keys():
             if self.size is not None:
+                padded_img = mmcv.impad(
+                    results['img'], shape=self.size, pad_val=self.pad_val)
+            elif self.size_divisor is not None:
+                padded_img = mmcv.impad_to_multiple(
+                    results['img'], self.size_divisor, pad_val=self.pad_val)
+            results['img'] = padded_img
+        if 'img2' in results.keys():
+            if self.size is not None:
+                padded_img1 = mmcv.impad(
+                    results['img1'], shape=self.size, pad_val=self.pad_val)
                 padded_img2 = mmcv.impad(
                     results['img2'], shape=self.size, pad_val=self.pad_val)
             elif self.size_divisor is not None:
+                padded_img1 = mmcv.impad_to_multiple(
+                    results['img1'], self.size_divisor, pad_val=self.pad_val)
                 padded_img2 = mmcv.impad_to_multiple(
                     results['img2'], self.size_divisor, pad_val=self.pad_val)
+            results['img1'] = padded_img1
             results['img2'] = padded_img2
         results['pad_shape'] = padded_img.shape
         results['pad_fixed_size'] = self.size
@@ -400,10 +406,12 @@ class Normalize(object):
             dict: Normalized results, 'img_norm_cfg' key is added into
                 result dict.
         """
-
-        results['img'] = mmcv.imnormalize(results['img'], self.mean, self.std,
-                                          self.to_rgb)
+        if 'img' in results:
+            results['img'] = mmcv.imnormalize(results['img'], self.mean, self.std,
+                                              self.to_rgb)
         if 'img2' in results:
+            results['img1'] = mmcv.imnormalize(results['img1'], self.mean, self.std,
+                                               self.to_rgb)
             results['img2'] = mmcv.imnormalize(results['img2'], self.mean, self.std,
                                                self.to_rgb)
             # sys.exit('ppppp')
@@ -893,11 +901,13 @@ class PhotoMetricDistortion(object):
         Returns:
             dict: Result dict with images distorted.
         """
-
-        results['img'] = self.once_operation(results['img'])
+        if 'img' in results.keys():
+            results['img'] = self.once_operation(results['img'])
         # random brightness
 
-        if 'img2' in results:
+        if 'img2' in results.keys():
+
+            results['img1'] = self.once_operation(results['img1'])
             results['img2'] = self.once_operation(results['img2'])
 
         return results
@@ -1039,7 +1049,7 @@ class RandomMIOUCrop(object):
                 updated according to crop size.
         """
 
-        img_origin = results['img']
+        img_origin = results.pop('img')
         crop_bbox, crop_bbox2, cover_crop_box = self.get_crop_bbox(img_origin)
 
         # sys.exit('1')
@@ -1047,7 +1057,7 @@ class RandomMIOUCrop(object):
         # crop the image
         img = self.crop(img_origin, crop_bbox)
         img = self.pixel_augmentations(img)
-        results['img'] = img
+        results['img1'] = img
         # print('img', img.dtype)
 
         img2 = self.crop(img_origin, crop_bbox2)

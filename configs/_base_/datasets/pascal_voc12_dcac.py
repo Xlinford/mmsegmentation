@@ -20,13 +20,13 @@ semi_train_pipeline = [
     dict(type='LoadImageFromFile'),
     dict(type='LoadSemiAnnotations', ratio=0.5),
     dict(type='Resize', img_scale=(2048, 512), ratio_range=(0.5, 2.0)),
+    dict(type='RandomFlip', prob=0.5),
     dict(type='RandomMIOUCrop', crop_size=crop_size, MIOU_range=(0.1, 1.0)),
-    dict(type='RandomFlip', prob=0),
     dict(type='PhotoMetricDistortion'),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='Pad', size=crop_size, pad_val=0, seg_pad_val=255),
     dict(type='DefaultFormatBundle'),
-    dict(type='Collect', keys=['img', 'img2']),
+    dict(type='Collect', keys=['img1', 'img2']),
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),

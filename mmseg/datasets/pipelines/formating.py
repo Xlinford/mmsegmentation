@@ -204,6 +204,12 @@ class DefaultFormatBundle(object):
                 img = np.expand_dims(img, -1)
             img = np.ascontiguousarray(img.transpose(2, 0, 1))
             results['img'] = DC(to_tensor(img), stack=True)
+        if 'img1' in results:
+            img1 = results['img1']
+            if len(img1.shape) < 3:
+                img1 = np.expand_dims(img1, -1)
+            img1 = np.ascontiguousarray(img1.transpose(2, 0, 1))
+            results['img1'] = DC(to_tensor(img1), stack=True)
         if 'img2' in results:
             img2 = results['img2']
             if len(img2.shape) < 3:

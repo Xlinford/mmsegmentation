@@ -105,7 +105,7 @@ class EncoderDecoder2Inputs(BaseSegmentor):
         losses.update(add_prefix(loss_decode, 'decode'))
         return losses
 
-    def _decode_head_forward_train_2inputs(self, x, x2, img_metas, gt_semantic_seg):
+    def _decode_head_forward_train_2inputs(self, x, x1, x2, img_metas, gt_semantic_seg):
         """Run forward function and calculate loss for decode head in
         training."""
         losses = dict()
@@ -145,11 +145,10 @@ class EncoderDecoder2Inputs(BaseSegmentor):
 
         return seg_logit
 
-    def forward_train(self, img, img_metas, gt_semantic_seg, img2=None, ):
+    def forward_train(self, img, img_metas, gt_semantic_seg, img1=None, img2=None, ):
         """Forward function for training.
 
         Args:
-            img2 (Tensor): Input images.
             img (Tensor): Input images.
             img_metas (list[dict]): List of image info dict where each dict
                 has: 'img_shape', 'scale_factor', 'flip', and may also contain
@@ -158,12 +157,14 @@ class EncoderDecoder2Inputs(BaseSegmentor):
                 `mmseg/datasets/pipelines/formatting.py:Collect`.
             gt_semantic_seg (Tensor): Semantic segmentation masks
                 used if the architecture supports semantic segmentation task.
-
+            img1 (Tensor): Input images.
+            img2 (Tensor): Input images.
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
 
         x = self.extract_feat(img)
+        x1 = self.extract_feat(img1)
         # print(x.shape())
         # print(img.dtype)
         # print(img2.dtype)
@@ -173,7 +174,7 @@ class EncoderDecoder2Inputs(BaseSegmentor):
 
         losses = dict()
 
-        loss_decode = self._decode_head_forward_train_2inputs(x, x2,
+        loss_decode = self._decode_head_forward_train_2inputs(x, x1, x2,
                                                               img_metas, gt_semantic_seg)
         losses.update(loss_decode)
 
