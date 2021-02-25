@@ -152,8 +152,6 @@ class EncoderDecoder(BaseSegmentor):
         """
 
         x = self.extract_feat(img)
-        print(img_metas.count)
-        sys.exit('11')
 
         losses = dict()
 
