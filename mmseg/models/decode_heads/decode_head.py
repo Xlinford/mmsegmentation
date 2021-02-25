@@ -70,7 +70,12 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
         self.in_index = in_index
-        self.loss_decode = build_loss(loss_decode)
+        if isinstance(loss_decode, list):
+            self.loss_decode = build_loss(loss_decode[0])
+            self.loss_decode1 = build_loss(loss_decode[1])
+        else:
+            self.loss_decode = build_loss(loss_decode)
+            self.loss_decode1 = None
         self.ignore_index = ignore_index
         self.align_corners = align_corners
         if sampler is not None:
@@ -167,7 +172,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         """Placeholder of forward function."""
         pass
 
-    def forward_train(self, inputs, img_metas, gt_semantic_seg, train_cfg, inputs2=None):
+    def forward_train(self, inputs, img_metas, gt_semantic_seg, train_cfg, inputs1=None, inputs2=None):
         """Forward function for training.
         Args:
             inputs (list[Tensor]): List of multi-level img features.
@@ -179,13 +184,16 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             gt_semantic_seg (Tensor): Semantic segmentation masks
                 used if the architecture supports semantic segmentation task.
             train_cfg (dict): The training config.
+            inputs1(list[Tensor]): List of multi-level img features.
+            inputs2(list[Tensor]): List of multi-level img features.
 
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        if inputs2 != None:
-            seg_logits, gt_semantic_seg = self.forward(inputs, inputs2)
-            losses = self.contrastive_losses(seg_logits, gt_semantic_seg, img_metas)
+        if inputs2 is not None:
+            seg_logits1, seg_label = self.forward(inputs1, inputs2)
+            seg_logits = self.forward(inputs)
+            losses = self.contrastive_losses(seg_logits, gt_semantic_seg, seg_logits1, seg_label, img_metas)
 
         else:
             seg_logits = self.forward(inputs)
@@ -216,7 +224,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         output = self.conv_seg(feat)
         return output
 
-    @force_fp32(apply_to=('seg_logit', ))
+    @force_fp32(apply_to=('seg_logit',))
     def losses(self, seg_logit, seg_label):
         """Compute segmentation loss."""
         loss = dict()
@@ -238,12 +246,17 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         loss['acc_seg'] = accuracy(seg_logit, seg_label)
         return loss
 
-    @force_fp32(apply_to=('seg_logit', 'seg_label'))
-    def contrastive_losses(self, seg_logit, seg_label, img_metas):
+    @force_fp32(apply_to=('seg_logits', 'seg_logits1', 'seg_label'))
+    def contrastive_losses(self, seg_logits, gt_semantic_seg, seg_logits1, seg_label, img_metas):
         """Compute pixel-wise contrastive loss."""
         loss = dict()
         seg_logit = resize(
-            input=seg_logit,
+            input=seg_logits,
+            size=seg_label.shape[2:],
+            mode='bilinear',
+            align_corners=self.align_corners)
+        seg_logit1 = resize(
+            input=seg_logits1,
             size=img_metas[0]['img_shape'][:2],
             mode='bilinear',
             align_corners=self.align_corners)
@@ -252,34 +265,23 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             size=img_metas[0]['img_shape'][:2],
             mode='bilinear',
             align_corners=self.align_corners)
-        # feat = []
-        # pseudo_labels = []
-        # for i in range(len(img_metas)):
-        #     crop_region = img_metas[i]['cover_crop_box']
-        #     feat.append(seg_logit[i, :, :, :])
-        #     pseudo_labels.append(seg_label[i, :, :, :])
-        #     feat[i], pseudo_labels[i] = corner_crop(crop_region, feat[i], pseudo_labels[i])
-        #
-        # seg_logit = feat
-        # seg_label = pseudo_labels
-        # seg_logit = feat[0]
-        # seg_label = pseudo_labels[0]
-        # for i in range(len(seg_logit)-1):
-        #     seg_logit = torch.cat((seg_logit, feat[i + 1]), dim=0)
-        #     seg_label = torch.cat((seg_label, pseudo_labels[i + 1]), dim=0)
-
 
         if self.sampler is not None:
-            seg_weight = self.sampler.sample(seg_logit, seg_label)
+            seg_weight1 = self.sampler.sample(seg_logit, gt_semantic_seg)
         else:
-            seg_weight = None
+            seg_weight1 = None
         # seg_label = seg_label.squeeze(1)
         loss['loss_seg'] = self.loss_decode(
             seg_logit,
-            seg_label,
-            img_metas,
-            weight=seg_weight,
+            gt_semantic_seg,
+            weight=seg_weight1,
             ignore_index=self.ignore_index)
-        # loss['acc_seg'] = accuracy(seg_logit, seg_label)
-        loss['acc_seg'] = 0.5
+        if self.loss_decode1 is not None:
+            loss['loss_seg'] = loss['loss_seg'] + self.loss_decode1(
+                seg_logit1,
+                seg_label,
+                img_metas,
+                weight=seg_weight1,
+                ignore_index=self.ignore_index)
+        loss['acc_seg'] = accuracy(seg_logit, gt_semantic_seg)
         return loss
