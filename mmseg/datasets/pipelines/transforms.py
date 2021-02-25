@@ -334,17 +334,17 @@ class Pad(object):
             results['img'] = padded_img
         if 'img2' in results.keys():
             if self.size is not None:
-                padded_img1 = mmcv.impad(
+                padded_img = mmcv.impad(
                     results['img1'], shape=self.size, pad_val=self.pad_val)
-                padded_img2 = mmcv.impad(
+                padded_img1 = mmcv.impad(
                     results['img2'], shape=self.size, pad_val=self.pad_val)
             elif self.size_divisor is not None:
-                padded_img1 = mmcv.impad_to_multiple(
+                padded_img = mmcv.impad_to_multiple(
                     results['img1'], self.size_divisor, pad_val=self.pad_val)
-                padded_img2 = mmcv.impad_to_multiple(
+                padded_img1 = mmcv.impad_to_multiple(
                     results['img2'], self.size_divisor, pad_val=self.pad_val)
-            results['img1'] = padded_img1
-            results['img2'] = padded_img2
+            results['img1'] = padded_img
+            results['img2'] = padded_img1
         results['pad_shape'] = padded_img.shape
         results['pad_fixed_size'] = self.size
         results['pad_size_divisor'] = self.size_divisor
