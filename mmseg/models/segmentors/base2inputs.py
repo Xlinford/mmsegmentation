@@ -119,6 +119,8 @@ class BaseSegmentor(nn.Module):
         the outer list indicating test time augmentations.
         """
         if return_loss:
+            import ipdb
+            ipdb.set_trace()
             return self.forward_train(img, img_metas, **kwargs)
         else:
             return self.forward_test(img, img_metas, **kwargs)
@@ -149,8 +151,6 @@ class BaseSegmentor(nn.Module):
                 DDP, it means the batch size on each GPU), which is used for
                 averaging the logs.
         """
-        import ipdb
-        ipdb.set_trace()
         del data_batch[0]['img_metas']
         data_batch[1].update(data_batch[0])
         losses = self(**data_batch[1])
