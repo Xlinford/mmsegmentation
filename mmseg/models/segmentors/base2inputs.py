@@ -152,8 +152,8 @@ class BaseSegmentor(nn.Module):
         import ipdb
         ipdb.set_trace()
         del data_batch[0]['img_metas']
-        data_batchs = data_batch[1].update(data_batch[0])
-        losses = self(**data_batchs)
+        data_batch[1].update(data_batch[0])
+        losses = self(**data_batch[1])
         loss, log_vars = self._parse_losses(losses)
 
         outputs = dict(
