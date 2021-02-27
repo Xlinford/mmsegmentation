@@ -119,9 +119,9 @@ def train_segmentor(model,
     elif cfg.load_from:
         runner.load_checkpoint(cfg.load_from)
     if 'semi_train' in cfg.data.keys():
-        max_iters = len(data_loaders[1])
+        epoch_max_iters = len(data_loaders[1])
         data_loaders = [iter(zip(cycle(data_loaders[0]), data_loaders[1]))]
-        runner.run(data_loaders, cfg.workflow, max_iters=max_iters)
+        runner.run(data_loaders, cfg.workflow, epoch_max_iters=epoch_max_iters)
     else:
         runner.run(data_loaders, cfg.workflow)
 
