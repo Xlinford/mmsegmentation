@@ -157,7 +157,7 @@ class BaseSegmentor(nn.Module):
         outputs = dict(
             loss=loss,
             log_vars=log_vars,
-            num_samples=len(data_batch['img'].data))
+            num_samples=len(data_batch[1]['img'].data))
 
         return outputs
 
