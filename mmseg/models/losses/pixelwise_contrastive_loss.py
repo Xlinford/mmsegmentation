@@ -148,8 +148,8 @@ class PixelwiseContrastiveLoss(nn.Module):
             pos_mask1 = (pseudo_logits2 > gamma)  # positive filtering mask (N)
             mask1 = torch.reshape(torch.argmax((dir_mask1 * pos_mask1).float(), dim=0), (1, -1)).squeeze(0)
             # final loss for the first crop
-            import ipdb
-            ipdb.set_trace()
+            # import ipdb
+            # ipdb.set_trace()
             loss1 = (mask1 * loss1).sum() / (mask1.sum() + 1e-8)
             if j == 0:
                 loss2 = loss1

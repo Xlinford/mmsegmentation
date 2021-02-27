@@ -194,6 +194,8 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             seg_logits1, seg_label = self.forward(inputs1, inputs2)
             seg_logits = self.forward(inputs)
             losses = self.contrastive_losses(seg_logits, gt_semantic_seg, seg_logits1, seg_label, img_metas)
+            import ipdb
+            ipdb.set_trace()
 
         else:
             seg_logits = self.forward(inputs)

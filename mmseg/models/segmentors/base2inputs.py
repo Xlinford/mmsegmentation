@@ -119,8 +119,6 @@ class BaseSegmentor(nn.Module):
         the outer list indicating test time augmentations.
         """
         if return_loss:
-            import ipdb
-            ipdb.set_trace()
             return self.forward_train(img, img_metas, **kwargs)
         else:
             return self.forward_test(img, img_metas, **kwargs)
