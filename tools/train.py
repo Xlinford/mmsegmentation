@@ -21,6 +21,11 @@ def parse_args():
     parser.add_argument('config', help='train config file path')
     parser.add_argument('--work-dir', help='the dir to save logs and models')
     parser.add_argument(
+        '--find_unused_parameters',
+        type=bool,
+        default=False,
+        help='the dir to save logs and models')
+    parser.add_argument(
         '--load-from', help='the checkpoint file to load weights from')
     parser.add_argument(
         '--resume-from', help='the checkpoint file to resume from')

@@ -115,3 +115,8 @@ work_dirs/
 
 # Pytorch
 *.pth
+/docs/config.md
+/docs/getting_started.md
+/docs/install.md
+/docs/tutorials/new_dataset.md
+/docs/tutorials/new_modules.md

@@ -135,14 +135,18 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
                 act_cfg=self.act_cfg)
         else:
             self.c1_bottleneck = None
+        self.squeeze_channel = ConvModule(
+            2048,
+            128,
+            1,
+            conv_cfg=self.conv_cfg,
+            norm_cfg=self.norm_cfg,
+            act_cfg=self.act_cfg)
         self.mlp = nn.Sequential(
-            ConvModule(
-                2048,
-                128,
-                1,
-                conv_cfg=self.conv_cfg,
-                norm_cfg=self.norm_cfg,
-                act_cfg=self.act_cfg))
+            nn.Linear(204800, 204800),
+            nn.Linear(204800, 204800),
+            nn.LeakyReLU(inplace=True),
+        )
         self.sep_bottleneck = nn.Sequential(
             DepthwiseSeparableConvModule(
                 self.channels + c1_channels,
@@ -182,6 +186,14 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
         output = self.cls_seg(output)
         return output
 
+    def mlp_projector(self, x):
+        x = self.squeeze_channel(x)
+        b, c, h, l = x.size()
+        x = x.view(b, -1, c * h * l)
+        x_feat = self.mlp(x)
+        x_feat = x_feat.view(b, c, h, l)
+        return x_feat
+
     def forward(self, inputs, inputs2=None):
         """Forward function."""
         output = None
@@ -190,11 +202,11 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
 
         if inputs2 is not None:
             x2 = self._transform_inputs(inputs2)
-            x_feat = self.mlp(x)
-            x2_feat = self.mlp(x2)
+            x_feat = self.mlp_projector(x)
+            x2_feat = self.mlp_projector(x2)
             output = self.head(x2, inputs2)
             x_feat.unsqueeze(1)
-            x2_feat.unsqueeze(2)
+            x2_feat.unsqueeze(1)
             feat = torch.cat([x_feat, x2_feat], dim=1)
 
         if output is not None:
@@ -204,7 +216,6 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
             output = torch.cat([output1, output], dim=1)
         else:
             output = self.head(x, inputs)
-
 
         if feat is not None:
             return feat, output
