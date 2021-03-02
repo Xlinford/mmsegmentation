@@ -111,7 +111,7 @@ class EncoderDecoder2Inputs(BaseSegmentor):
         losses = dict()
         loss_decode = self.decode_head.forward_train(x, img_metas,
                                                      gt_semantic_seg,
-                                                     self.train_cfg, x2)
+                                                     self.train_cfg, x1, x2)
 
         losses.update(add_prefix(loss_decode, 'decode'))
         return losses
@@ -162,20 +162,16 @@ class EncoderDecoder2Inputs(BaseSegmentor):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-
-        x = self.extract_feat(img)
-        x1 = self.extract_feat(img1)
-        # print(x.shape())
-        # print(img.dtype)
-        # print(img2.dtype)
-        # sys.exit('1123')
-        x2 = self.extract_feat(img2)
-
-
         losses = dict()
-
+        x1 = None
+        x2 = None
+        x = self.extract_feat(img)
+        if img1 is not None:
+            x1 = self.extract_feat(img1)
+            x2 = self.extract_feat(img2)
         loss_decode = self._decode_head_forward_train_2inputs(x, x1, x2,
                                                               img_metas, gt_semantic_seg)
+
         losses.update(loss_decode)
 
         if self.with_auxiliary_head:

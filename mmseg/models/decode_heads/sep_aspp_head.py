@@ -135,16 +135,22 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
                 act_cfg=self.act_cfg)
         else:
             self.c1_bottleneck = None
-        self.squeeze_channel = ConvModule(
-            2048,
-            128,
-            1,
-            conv_cfg=self.conv_cfg,
-            norm_cfg=self.norm_cfg,
-            act_cfg=self.act_cfg)
+
         self.mlp = nn.Sequential(
-            nn.Linear(204800, 204800),
-            nn.Linear(204800, 204800),
+            ConvModule(
+                self.in_channels,
+                128,
+                1,
+                conv_cfg=self.conv_cfg,
+                norm_cfg=self.norm_cfg,
+                act_cfg=self.act_cfg),
+            ConvModule(
+                128,
+                128,
+                1,
+                conv_cfg=self.conv_cfg,
+                norm_cfg=self.norm_cfg,
+                act_cfg=self.act_cfg),
             nn.LeakyReLU(inplace=True),
         )
         self.sep_bottleneck = nn.Sequential(
@@ -187,37 +193,16 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
         return output
 
     def mlp_projector(self, x):
-        x = self.squeeze_channel(x)
-        b, c, h, l = x.size()
-        x = x.view(b, -1, c * h * l)
-        x_feat = self.mlp(x)
-        x_feat = x_feat.view(b, c, h, l)
-        return x_feat
+        mlp_feat = self.mlp(x)
+        return mlp_feat
 
-    def forward(self, inputs, inputs2=None):
+    def forward(self, inputs, mlp=False):
         """Forward function."""
-        output = None
-        feat = None
         x = self._transform_inputs(inputs)
 
-        if inputs2 is not None:
-            x2 = self._transform_inputs(inputs2)
+        output = self.head(x, inputs)
+        if mlp:
             x_feat = self.mlp_projector(x)
-            x2_feat = self.mlp_projector(x2)
-            output = self.head(x2, inputs2)
-            x_feat.unsqueeze(1)
-            x2_feat.unsqueeze(1)
-            feat = torch.cat([x_feat, x2_feat], dim=1)
-
-        if output is not None:
-            output1 = self.head(x, inputs)
-            output.unsqueeze(1)
-            output1.unsqueeze(1)
-            output = torch.cat([output1, output], dim=1)
-        else:
-            output = self.head(x, inputs)
-
-        if feat is not None:
-            return feat, output
+            return output, x_feat
         else:
             return output

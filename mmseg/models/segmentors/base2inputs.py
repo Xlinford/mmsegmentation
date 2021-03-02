@@ -149,15 +149,24 @@ class BaseSegmentor(nn.Module):
                 DDP, it means the batch size on each GPU), which is used for
                 averaging the logs.
         """
-        del data_batch[0]['img_metas']
-        data_batch[1].update(data_batch[0])
-        losses = self(**data_batch[1])
-        loss, log_vars = self._parse_losses(losses)
+        if isinstance(data_batch, (tuple,)):
+            del data_batch[0]['img_metas']
+            data_batch[1].update(data_batch[0])
+            losses = self(**data_batch[1])
+            loss, log_vars = self._parse_losses(losses)
 
-        outputs = dict(
-            loss=loss,
-            log_vars=log_vars,
-            num_samples=len(data_batch[1]['img'].data))
+            outputs = dict(
+                loss=loss,
+                log_vars=log_vars,
+                num_samples=len(data_batch[1]['img'].data))
+        else:
+            losses = self(**data_batch)
+            loss, log_vars = self._parse_losses(losses)
+
+            outputs = dict(
+                loss=loss,
+                log_vars=log_vars,
+                num_samples=len(data_batch['img'].data))
 
         return outputs
 

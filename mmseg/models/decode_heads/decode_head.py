@@ -168,7 +168,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
 
     @auto_fp16()
     @abstractmethod
-    def forward(self, inputs, inputs2=None):
+    def forward(self, inputs):
         """Placeholder of forward function."""
         pass
 
@@ -190,15 +190,18 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
+        import ipdb
+        ipdb.set_trace()
         if inputs2 is not None:
-            seg_logits1, seg_label = self.forward(inputs1, inputs2)
-            seg_logits = self.forward(inputs)
-            losses = self.contrastive_losses(seg_logits, gt_semantic_seg, seg_logits1, seg_label, img_metas)
-            import ipdb
-            ipdb.set_trace()
+            seg_logits = self.forward([inputs, inputs1, inputs2])
+            seg_logits1, feat1 = self.forward(inputs1, mlp=True)
+            seg_logits2, feat2 = self.forward(inputs2,  mlp=True)
+            seg_label = torch.cat((seg_logits1, seg_logits2), dim=1)
+            seg_logits_concat = torch.cat((feat1, feat2), dim=1)
+            losses = self.contrastive_losses(seg_logits, gt_semantic_seg, seg_logits_concat, seg_label, img_metas)
 
         else:
-            seg_logits = self.forward(inputs)
+            seg_logits, feat = self.forward(inputs)
             losses = self.losses(seg_logits, gt_semantic_seg)
         return losses
 
@@ -254,7 +257,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         loss = dict()
         seg_logit = resize(
             input=seg_logits,
-            size=seg_label.shape[2:],
+            size=gt_semantic_seg.shape[2:],
             mode='bilinear',
             align_corners=self.align_corners)
         seg_logit1 = resize(
@@ -272,7 +275,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             seg_weight1 = self.sampler.sample(seg_logit, gt_semantic_seg)
         else:
             seg_weight1 = None
-        # seg_label = seg_label.squeeze(1)
+        gt_semantic_seg = gt_semantic_seg.squeeze(1)
         loss['loss_seg'] = self.loss_decode(
             seg_logit,
             gt_semantic_seg,
