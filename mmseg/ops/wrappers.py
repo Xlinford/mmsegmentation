@@ -35,20 +35,24 @@ def corner_crop(crop_region,
                 repeat_times=2):
     feats_crop = []
     labels_crop = []
-    for i in range(repeat_times):
-        feat_one = feat[128*i:(128*(i+1)), :, :]
-        pseudo_label_one = pseudo_labels[21*i:(21*(i+1)), :, :]
-        crop_y1, crop_y2, crop_x1, crop_x2 = crop_region[i]
-        feats_crop.append(feat_one[:, crop_y1:crop_y2, crop_x1:crop_x2])
-        labels_crop.append(pseudo_label_one[:, crop_y1:crop_y2, crop_x1:crop_x2])
-    feats_return = feats_crop[0]
-    labels_return = labels_crop[0]
+    with torch.autograd.set_detect_anomaly(True):
 
-    for i in range(len(feats_crop)-1):
-        feats_return = torch.cat((feats_return, feats_crop[i+1]), dim=0)
-        labels_return = torch.cat((labels_return, labels_crop[i+1]), dim=0)
+        # for i in range(repeat_times):
+        #     feat_one = feat[128*i:(128*(i+1)), :, :]
+        #     pseudo_label_one = pseudo_labels[21*i:(21*(i+1)), :, :]
+        #     crop_y1, crop_y2, crop_x1, crop_x2 = crop_region[i]
+        #     feats_crop.append(feat_one[:, crop_y1:crop_y2, crop_x1:crop_x2])
+        #     labels_crop.append(pseudo_label_one[:, crop_y1:crop_y2, crop_x1:crop_x2])
+        for i in range(repeat_times):
+            # feat_one = feat[i]
+            # pseudo_label_one = pseudo_labels[i]
+            crop_y1, crop_y2, crop_x1, crop_x2 = crop_region[i]
+            feats_crop.append(feat[i][:, crop_y1:crop_y2, crop_x1:crop_x2])
+            labels_crop.append(pseudo_labels[i][:, crop_y1:crop_y2, crop_x1:crop_x2])
+        # feats_return = torch.cat(feats_crop, dim=0)
+        # labels_return = torch.cat(labels_crop, dim=0)
 
-    return feats_return, labels_return
+        return feats_crop, labels_crop
 
 
 class Upsample(nn.Module):

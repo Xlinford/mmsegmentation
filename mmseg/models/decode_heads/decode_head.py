@@ -190,18 +190,16 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         Returns:
             dict[str, Tensor]: a dictionary of loss components
         """
-        import ipdb
-        ipdb.set_trace()
         if inputs2 is not None:
-            seg_logits = self.forward([inputs, inputs1, inputs2])
-            seg_logits1, feat1 = self.forward(inputs1, mlp=True)
-            seg_logits2, feat2 = self.forward(inputs2,  mlp=True)
-            seg_label = torch.cat((seg_logits1, seg_logits2), dim=1)
-            seg_logits_concat = torch.cat((feat1, feat2), dim=1)
+            seg_logits, seg_logits_concat, seg_label = self.forward([inputs, inputs1, inputs2])
+            # seg_logits1, feat1 = self.forward(inputs1, mlp=True)
+            # seg_logits2, feat2 = self.forward(inputs2,  mlp=True)
+            # seg_label = torch.cat((seg_logits1, seg_logits2), dim=1)
+            # seg_logits_concat = torch.cat((feat1, feat2), dim=1)
             losses = self.contrastive_losses(seg_logits, gt_semantic_seg, seg_logits_concat, seg_label, img_metas)
 
         else:
-            seg_logits, feat = self.forward(inputs)
+            seg_logits = self.forward(inputs)
             losses = self.losses(seg_logits, gt_semantic_seg)
         return losses
 
@@ -260,16 +258,19 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             size=gt_semantic_seg.shape[2:],
             mode='bilinear',
             align_corners=self.align_corners)
-        seg_logit1 = resize(
-            input=seg_logits1,
-            size=img_metas[0]['img_shape'][:2],
-            mode='bilinear',
-            align_corners=self.align_corners)
-        seg_label = resize(
-            input=seg_label,
-            size=img_metas[0]['img_shape'][:2],
-            mode='bilinear',
-            align_corners=self.align_corners)
+        for i, logit in enumerate(seg_logits1):
+            seg_logits1[i] = resize(
+                input=logit,
+                size=img_metas[0]['img_shape'][:2],
+                mode='bilinear',
+                align_corners=self.align_corners)
+
+        for i, label in enumerate(seg_label):
+            seg_label[i] = resize(
+                input=label,
+                size=img_metas[0]['img_shape'][:2],
+                mode='bilinear',
+                align_corners=self.align_corners)
 
         if self.sampler is not None:
             seg_weight1 = self.sampler.sample(seg_logit, gt_semantic_seg)
@@ -283,10 +284,24 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             ignore_index=self.ignore_index)
         if self.loss_decode1 is not None:
             loss['loss_seg'] = loss['loss_seg'] + self.loss_decode1(
-                seg_logit1,
+                seg_logits1,
                 seg_label,
                 img_metas,
                 weight=seg_weight1,
                 ignore_index=self.ignore_index)
+        # loss['loss_seg'] = self.loss_decode1(
+        #                     seg_logits1,
+        #                     seg_label,
+        #                     img_metas,
+        #                     weight=None,
+        #                     ignore_index=self.ignore_index)
+        # loss['loss_seg'] = self.loss_decode1(
+        #     seg_logits1,
+        #     seg_label,
+        #     img_metas,
+        #     weight=None,
+        #     ignore_index=self.ignore_index)
         loss['acc_seg'] = accuracy(seg_logit, gt_semantic_seg)
+        import ipdb
+        ipdb.set_trace()
         return loss

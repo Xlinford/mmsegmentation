@@ -151,7 +151,7 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
                 conv_cfg=self.conv_cfg,
                 norm_cfg=self.norm_cfg,
                 act_cfg=self.act_cfg),
-            nn.LeakyReLU(inplace=True),
+            nn.LeakyReLU(inplace=False),
         )
         self.sep_bottleneck = nn.Sequential(
             DepthwiseSeparableConvModule(
@@ -196,13 +196,22 @@ class DepthwiseSeparableASPPHead2Inputs(ASPPHead):
         mlp_feat = self.mlp(x)
         return mlp_feat
 
-    def forward(self, inputs, mlp=False):
+    def forward(self, inputs):
         """Forward function."""
-        x = self._transform_inputs(inputs)
-
-        output = self.head(x, inputs)
-        if mlp:
-            x_feat = self.mlp_projector(x)
-            return output, x_feat
+        if isinstance(inputs, (list,)):
+            output = []
+            x_feat = []
+            for i in inputs:
+                x = self._transform_inputs(i)
+                # x_clone = x.clone().detach()
+                output.append(self.head(x, i))
+                x_feat.append(self.mlp_projector(x))
+            seg_logits = output[0]
+            # seg_logits_concat = torch.cat(x_feat[1:], dim=1)
+            # seg_label = torch.cat(output[1:], dim=1)
+            return seg_logits, x_feat[1:], output[1:]
         else:
+            x = self._transform_inputs(inputs)
+
+            output = self.head(x, inputs)
             return output
