@@ -302,6 +302,5 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         #     weight=None,
         #     ignore_index=self.ignore_index)
         loss['acc_seg'] = accuracy(seg_logit, gt_semantic_seg)
-        import ipdb
-        ipdb.set_trace()
+
         return loss
