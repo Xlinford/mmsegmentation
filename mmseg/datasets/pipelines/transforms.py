@@ -2,6 +2,7 @@ import mmcv
 import numpy as np
 import cv2
 import logging
+import ipdb
 import sys
 from mmcv.utils import deprecated_api_warning, is_tuple_of
 from numpy import random
@@ -196,6 +197,8 @@ class Resize(object):
                                 dtype=np.float32)
         results['img'] = img
         results['img_shape'] = img.shape
+        if img.shape[:2] is not [320, 320]:
+            ipdb.set_trace()
         results['pad_shape'] = img.shape  # in case that there is no padding
         results['scale_factor'] = scale_factor
         results['keep_ratio'] = self.keep_ratio
@@ -579,7 +582,8 @@ class RandomCrop(object):
         img_shape = img.shape
         results['img'] = img
         results['img_shape'] = img_shape
-
+        if img.shape[:2] is not [320, 320]:
+            ipdb.set_trace()
         # crop semantic seg
         for key in results.get('seg_fields', []):
             results[key] = self.crop(results[key], crop_bbox)
@@ -718,7 +722,8 @@ class RGB2Gray(object):
 
         results['img'] = img
         results['img_shape'] = img.shape
-
+        if img.shape[:2] is not [320, 320]:
+            ipdb.set_trace()
         return results
 
     def __repr__(self):
@@ -1069,6 +1074,8 @@ class RandomMIOUCrop(object):
         corner_position1, corner_position2 = self.get_crop_corner(cover_crop_box)
 
         results['img_shape'] = img_shape
+        if img.shape[:2] is not [320, 320]:
+            ipdb.set_trace()
         results['cover_crop_box'] = [corner_position1, corner_position2]
 
         # crop semantic seg
