@@ -143,7 +143,7 @@ class PixelwiseContrastiveLoss(nn.Module):
             neg_pseudo_labels1 = torch.reshape(neg_pseudo_labels1, (1, -1))
             # import ipdb
             # ipdb.set_trace()
-            print_log(f'{[feats1.size(), feats2.size()]}', logger=get_root_logger())
+            print_log(f'input{j}{[feats1.size(), feats2.size()]}', logger=get_root_logger())
             pos1 = (feats1 * feats2.detach()).sum(0) / temp  # positive scores (N)
             neg_logits = torch.zeros(pos1.size(0), device=pos1.device)  # initialize negative scores (n)N
             # divide the negative logits computation into several parts
