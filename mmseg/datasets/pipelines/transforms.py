@@ -720,7 +720,7 @@ class RGB2Gray(object):
 
         results['img'] = img
         results['img_shape'] = img.shape
-        if img.shape is not (320, 320, 3):
+        if img.shape != (320, 320, 3):
             ipdb.set_trace()
         return results
 
@@ -1072,7 +1072,7 @@ class RandomMIOUCrop(object):
         corner_position1, corner_position2 = self.get_crop_corner(cover_crop_box)
 
         results['img_shape'] = img_shape
-        if img.shape is not (320, 320, 3):
+        if img.shape != (320, 320, 3):
             ipdb.set_trace()
         results['cover_crop_box'] = [corner_position1, corner_position2]
 
