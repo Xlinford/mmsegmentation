@@ -580,8 +580,6 @@ class RandomCrop(object):
         img_shape = img.shape
         results['img'] = img
         results['img_shape'] = img_shape
-        if img.shape != (320, 320, 3):
-            ipdb.set_trace()
         # crop semantic seg
         for key in results.get('seg_fields', []):
             results[key] = self.crop(results[key], crop_bbox)
@@ -720,8 +718,6 @@ class RGB2Gray(object):
 
         results['img'] = img
         results['img_shape'] = img.shape
-        if img.shape != (320, 320, 3):
-            ipdb.set_trace()
         return results
 
     def __repr__(self):
@@ -1072,8 +1068,6 @@ class RandomMIOUCrop(object):
         corner_position1, corner_position2 = self.get_crop_corner(cover_crop_box)
 
         results['img_shape'] = img_shape
-        if img.shape != (320, 320, 3):
-            ipdb.set_trace()
         results['cover_crop_box'] = [corner_position1, corner_position2]
 
         # crop semantic seg
