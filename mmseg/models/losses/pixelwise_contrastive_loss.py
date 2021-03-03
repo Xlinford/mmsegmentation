@@ -4,6 +4,8 @@ import torch.nn.functional as F
 
 from ..builder import LOSSES
 from .utils import weight_reduce_loss
+from mmcv.utils import print_log
+from mmseg.utils import get_root_logger
 from mmseg.ops import corner_crop
 
 
@@ -139,8 +141,9 @@ class PixelwiseContrastiveLoss(nn.Module):
             # pseudo_logits-->[B,C,H,W] pos_pseudo_labels1-->[1,H,W]
             neg_pseudo_labels1 = torch.argmax(torch.squeeze(pseudo_logits[0][j], dim=0), dim=0)
             neg_pseudo_labels1 = torch.reshape(neg_pseudo_labels1, (1, -1))
-            import ipdb
-            ipdb.set_trace()
+            # import ipdb
+            # ipdb.set_trace()
+            print_log(f'{[feats1.size(), feats2.size()]}', logger=get_root_logger())
             pos1 = (feats1 * feats2.detach()).sum(0) / temp  # positive scores (N)
             neg_logits = torch.zeros(pos1.size(0), device=pos1.device)  # initialize negative scores (n)N
             # divide the negative logits computation into several parts
