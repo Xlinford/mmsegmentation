@@ -197,7 +197,8 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             # seg_logits2, feat2 = self.forward(inputs2,  mlp=True)
             # seg_label = torch.cat((seg_logits1, seg_logits2), dim=1)
             # seg_logits_concat = torch.cat((feat1, feat2), dim=1)
-            losses = self.contrastive_losses(seg_logits, gt_semantic_seg, seg_logits_concat, seg_label, img_metas)
+            # losses = self.contrastive_losses(seg_logits, gt_semantic_seg, seg_logits_concat, seg_label, img_metas)
+            losses = self.losses(seg_logits, gt_semantic_seg)
 
         else:
             seg_logits = self.forward(inputs)
