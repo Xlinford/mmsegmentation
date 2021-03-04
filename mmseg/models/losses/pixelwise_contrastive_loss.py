@@ -227,7 +227,7 @@ class PixelwiseContrastiveLoss(nn.Module):
         # neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)  # [1,b]
         # negative sampling mask (Nxb)
         neg_mask = (pseudo_labels1 != neg_pseudo_labels).float()
-        neg_scores = (feats.T @ neg_feats) / 100  # negative scores (Nxb)
+        neg_scores = (feats.T @ neg_feats) / (10 * self.temp)  # negative scores (Nxb)
         return (neg_mask.float() * torch.exp(neg_scores)).sum(-1)
 
     def forward(self,
