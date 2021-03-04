@@ -1,6 +1,9 @@
 import torch
 import torch.nn as nn
+from torch.nn import BatchNorm1d
 import torch.nn.functional as F
+from torchvision import transforms
+import ipdb
 
 from ..builder import LOSSES
 from .utils import weight_reduce_loss
@@ -219,6 +222,8 @@ class PixelwiseContrastiveLoss(nn.Module):
         Returns:
 
         """
+        ipdb.set_trace()
+
         pseudo_labels1 = pseudo_labels.permute(1, 0)  # [h*w,1]
         # neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)  # [1,b]
         # negative sampling mask (Nxb)
@@ -251,14 +256,13 @@ class PixelwiseContrastiveLoss(nn.Module):
         # b: an integer to divide the loss computation into several parts
         # N: overlapping region;    n: crop region
 
-        temp = 0.1
+        temp = 10
         b = 300
         gamma = 0.75
         n = img_metas[1]['img_shape']
         n = n[0] * n[1]
         loss = []
         pos_feats, pos_pseudo_labels = self.feature_prepare(feats, pseudo_logits, img_metas)
-        import ipdb
         ipdb.set_trace()
 
         for j in range(len(pos_feats)):
@@ -274,7 +278,7 @@ class PixelwiseContrastiveLoss(nn.Module):
 
             # print_log(f'input{j}{[feats1.size(), feats2.size()]}', logger=get_root_logger())
             pos1 = (feats1 * feats2.detach()).sum(0) / temp  # positive scores (N)
-            #
+            transforms.Normalize(5, 5)(pos1)
             # try:
             #     pos1 = (feats1 * feats2.detach()).sum(0) / temp  # positive scores (N)
             # except:
@@ -286,12 +290,15 @@ class PixelwiseContrastiveLoss(nn.Module):
             for i in range((n - 1) // b + 1):
                 neg_feats_i = neg_feats[:, i * b:(i + 1) * b]
                 neg_pseudo_labels_i = neg_pseudo_labels1[:, i * b:(i + 1) * b]
+                ipdb.set_trace()
+
                 neg_logits_i = torch.utils.checkpoint.checkpoint(
                     self.calc_neg_logits,
                     feats1,  # [128,h*w]
                     pseudo_labels1,  # [1,h*w]
                     neg_feats_i,  # [128,b]
-                    neg_pseudo_labels_i)  # [1,b]
+                    neg_pseudo_labels_i,
+                    temp=temp)  # [1,b]
                 neg_logits += neg_logits_i
             # compute the loss for the first crop
             logits1 = torch.exp(pos1) / (torch.exp(pos1) + neg_logits + 1e-8)
