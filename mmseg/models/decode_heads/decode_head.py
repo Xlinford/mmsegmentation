@@ -70,12 +70,13 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         self.norm_cfg = norm_cfg
         self.act_cfg = act_cfg
         self.in_index = in_index
-        if isinstance(loss_decode, list):
-            self.loss_decode = build_loss(loss_decode[0])
-            self.loss_decode1 = build_loss(loss_decode[1])
-        else:
-            self.loss_decode = build_loss(loss_decode)
-            self.loss_decode1 = None
+        # if isinstance(loss_decode, list):
+        #     self.loss_decode = build_loss(loss_decode[0])
+        #     self.loss_decode1 = build_loss(loss_decode[1])
+        # else:
+        #     self.loss_decode = build_loss(loss_decode)
+        #     self.loss_decode1 = None
+        self.loss_decode = build_loss(loss_decode)
         self.ignore_index = ignore_index
         self.align_corners = align_corners
         if sampler is not None:
@@ -278,17 +279,13 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             seg_weight1 = None
         gt_semantic_seg = gt_semantic_seg.squeeze(1)
         loss['loss_seg'] = self.loss_decode(
+            seg_logits1,
+            seg_label,
             seg_logit,
             gt_semantic_seg,
+            img_metas,
             weight=seg_weight1,
             ignore_index=self.ignore_index)
-        if self.loss_decode1 is not None:
-            loss['loss_seg'] = loss['loss_seg'] + self.loss_decode1(
-                seg_logits1,
-                seg_label,
-                img_metas,
-                weight=seg_weight1,
-                ignore_index=self.ignore_index)
         # loss['loss_seg'] = self.loss_decode1(
         #                     seg_logits1,
         #                     seg_label,

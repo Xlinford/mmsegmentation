@@ -27,7 +27,6 @@ model = dict(
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=[
-            dict(type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0),
             dict(type='PixelwiseContrastiveLoss', use_sigmoid=False, loss_weight=0.1),
         ]))
 # model training and testing settings
