@@ -170,6 +170,7 @@ class PixelwiseContrastiveLoss(nn.Module):
         self.reduction = reduction
         self.loss_weight = loss_weight
         self.class_weight = class_weight
+        self.temp = 10
         if self.use_sigmoid:
             self.cls_criterion = binary_cross_entropy
         elif self.use_mask:
@@ -190,26 +191,25 @@ class PixelwiseContrastiveLoss(nn.Module):
             seg_logit: list, length = Batch, size like [C, y, x]
             seg_label: list, length = Batch, size like [C, y, x]
         """
-        with torch.autograd.set_detect_anomaly(True):
 
-            feat = []
-            pseudo_labels = []
-            feat1 = [i for i in range(len(img_metas))]
-            pseudo_labels1 = feat1.copy()
+        feat = []
+        pseudo_labels = []
+        feat1 = [i for i in range(len(img_metas))]
+        pseudo_labels1 = feat1.copy()
 
-            for i in range(len(img_metas)):
-                crop_region = img_metas[i]['cover_crop_box']
-                # feat.append(seg_logit[0][i, :, :, :])
-                feat.append([logit[i, :, :, :] for logit in seg_logit])
-                pseudo_labels.append([label[i, :, :, :] for label in seg_label])
-                # pseudo_labels.append(seg_label[i, :, :, :])
-                feat1[i], pseudo_labels1[i] = corner_crop(crop_region, feat[i], pseudo_labels[i])
+        for i in range(len(img_metas)):
+            crop_region = img_metas[i]['cover_crop_box']
+            # feat.append(seg_logit[0][i, :, :, :])
+            feat.append([logit[i, :, :, :] for logit in seg_logit])
+            pseudo_labels.append([label[i, :, :, :] for label in seg_label])
+            # pseudo_labels.append(seg_label[i, :, :, :])
+            feat1[i], pseudo_labels1[i] = corner_crop(crop_region, feat[i], pseudo_labels[i])
 
-            # seg_logit = feat
-            # seg_label = pseudo_labels
-            return feat1, pseudo_labels1
+        # seg_logit = feat
+        # seg_label = pseudo_labels
+        return feat1, pseudo_labels1
 
-    def calc_neg_logits(self, feats, pseudo_labels, neg_feats, neg_pseudo_labels, temp=0.1):
+    def calc_neg_logits(self, feats, pseudo_labels, neg_feats, neg_pseudo_labels):
         """calculate negative feature pair
 
         Args:
@@ -217,18 +217,17 @@ class PixelwiseContrastiveLoss(nn.Module):
             pseudo_labels: [1,h*w]
             neg_feats: [128,b]
             neg_pseudo_labels: [1,b]
-            temp: 0.1
+            temp: 10
 
         Returns:
 
         """
-        ipdb.set_trace()
 
         pseudo_labels1 = pseudo_labels.permute(1, 0)  # [h*w,1]
         # neg_pseudo_labels = neg_pseudo_labels.unsqueeze(0)  # [1,b]
         # negative sampling mask (Nxb)
         neg_mask = (pseudo_labels1 != neg_pseudo_labels).float()
-        neg_scores = (feats.T @ neg_feats) / temp  # negative scores (Nxb)
+        neg_scores = (feats.T @ neg_feats) / 100  # negative scores (Nxb)
         return (neg_mask.float() * torch.exp(neg_scores)).sum(-1)
 
     def forward(self,
@@ -256,14 +255,12 @@ class PixelwiseContrastiveLoss(nn.Module):
         # b: an integer to divide the loss computation into several parts
         # N: overlapping region;    n: crop region
 
-        temp = 10
         b = 300
         gamma = 0.75
         n = img_metas[1]['img_shape']
         n = n[0] * n[1]
         loss = []
         pos_feats, pos_pseudo_labels = self.feature_prepare(feats, pseudo_logits, img_metas)
-        ipdb.set_trace()
 
         for j in range(len(pos_feats)):
             feats1 = torch.reshape(pos_feats[j][0], (128, -1))
@@ -277,8 +274,7 @@ class PixelwiseContrastiveLoss(nn.Module):
             neg_pseudo_labels1 = torch.reshape(neg_pseudo_labels1, (1, -1))
 
             # print_log(f'input{j}{[feats1.size(), feats2.size()]}', logger=get_root_logger())
-            pos1 = (feats1 * feats2.detach()).sum(0) / temp  # positive scores (N)
-            transforms.Normalize(5, 5)(pos1)
+            pos1 = (feats1 * feats2.detach()).sum(0) / self.temp  # positive scores (N)
             # try:
             #     pos1 = (feats1 * feats2.detach()).sum(0) / temp  # positive scores (N)
             # except:
@@ -287,20 +283,19 @@ class PixelwiseContrastiveLoss(nn.Module):
             neg_logits = torch.zeros(pos1.size(0), device=pos1.device)  # initialize negative scores (n)N
             # divide the negative logits computation into several parts
             # in each part, only b negative samples are considered
+
             for i in range((n - 1) // b + 1):
                 neg_feats_i = neg_feats[:, i * b:(i + 1) * b]
                 neg_pseudo_labels_i = neg_pseudo_labels1[:, i * b:(i + 1) * b]
-                ipdb.set_trace()
-
                 neg_logits_i = torch.utils.checkpoint.checkpoint(
                     self.calc_neg_logits,
                     feats1,  # [128,h*w]
                     pseudo_labels1,  # [1,h*w]
                     neg_feats_i,  # [128,b]
-                    neg_pseudo_labels_i,
-                    temp=temp)  # [1,b]
+                    neg_pseudo_labels_i)  # [1,b]
                 neg_logits += neg_logits_i
             # compute the loss for the first crop
+
             logits1 = torch.exp(pos1) / (torch.exp(pos1) + neg_logits + 1e-8)
             lossn = -torch.log(logits1 + 1e-8)  # (N)
             dir_mask1 = (pseudo_logits1 < pseudo_logits2)  # directional mask (N)
@@ -325,7 +320,6 @@ class PixelwiseContrastiveLoss(nn.Module):
             reduction=reduction,
             avg_factor=avg_factor,
             **kwargs)
-        ipdb.set_trace()
         loss1 = sum(loss)
         loss2 = self.loss_weight * loss1 + loss_cls
 
