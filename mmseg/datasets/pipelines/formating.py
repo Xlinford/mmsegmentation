@@ -95,7 +95,7 @@ class ImageToTensor(object):
             if len(img.shape) < 3:
                 img = np.expand_dims(img, -1)
             results[key] = to_tensor(img.transpose(2, 0, 1))
-        print(f'ImageToTensor self.keys: {self.keys}')
+        # print(f'ImageToTensor self.keys: {self.keys}')
         return results
 
     def __repr__(self):

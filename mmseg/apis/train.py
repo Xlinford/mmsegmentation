@@ -54,15 +54,10 @@ def train_segmentor(model,
             seed=cfg.seed,
             drop_last=True) for ds in dataset]
 
-    # for i, data_batch in enumerate(data_loaders[0]):
-    #     print(type(data_batch))
 
     # put model on gpus
     if distributed:
         find_unused_parameters = cfg.get('find_unused_parameters', False)
-        # print(find_unused_parameters)
-        # print(cfg.get('find_unused_parameters'))
-        # find_unused_parameters = True
         # Sets the `find_unused_parameters` parameter in
         # torch.nn.parallel.DistributedDataParallel
         model = MMDistributedDataParallel(
