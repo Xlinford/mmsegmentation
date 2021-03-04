@@ -4,7 +4,8 @@ import torch
 import torch.nn as nn
 from mmcv.cnn import normal_init
 from mmcv.runner import auto_fp16, force_fp32
-
+from mmcv.utils import print_log
+from mmseg.utils import get_root_logger
 from mmseg.core import build_pixel_sampler
 from mmseg.ops import resize, corner_crop
 from ..builder import build_loss
@@ -197,8 +198,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             # seg_logits2, feat2 = self.forward(inputs2,  mlp=True)
             # seg_label = torch.cat((seg_logits1, seg_logits2), dim=1)
             # seg_logits_concat = torch.cat((feat1, feat2), dim=1)
-            # losses = self.contrastive_losses(seg_logits, gt_semantic_seg, seg_logits_concat, seg_label, img_metas)
-            losses = self.losses(seg_logits, gt_semantic_seg)
+            losses = self.contrastive_losses(seg_logits, gt_semantic_seg, seg_logits_concat, seg_label, img_metas)
 
         else:
             seg_logits = self.forward(inputs)
@@ -287,6 +287,8 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             img_metas,
             weight=seg_weight,
             ignore_index=self.ignore_index)
+        print_log(f"{loss['loss_seg']}", logger=get_root_logger())
+
         # loss['loss_seg'] = self.loss_decode1(
         #                     seg_logits1,
         #                     seg_label,
