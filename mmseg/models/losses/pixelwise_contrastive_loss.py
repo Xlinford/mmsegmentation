@@ -235,10 +235,7 @@ class PixelwiseContrastiveLoss(nn.Module):
                 gt_semantic_seg,
                 img_metas,
                 weight=None,
-                reduction='mean',
                 avg_factor=None,
-                class_weight=None,
-                ignore_index=255,
                 reduction_override=None,
                 **kwargs):
         """Forward function."""
@@ -262,12 +259,6 @@ class PixelwiseContrastiveLoss(nn.Module):
         n = img_metas[1]['img_shape']
         n = n[0] * n[1]
         loss = []
-        # return F.cross_entropy(
-        #     feats,
-        #     pseudo_logits,
-        #     weight=class_weight,
-        #     reduction='none',
-        #     ignore_index=ignore_index)
         pos_feats, pos_pseudo_labels = self.feature_prepare(feats, pseudo_logits, img_metas)
 
         for j in range(len(pos_feats)):

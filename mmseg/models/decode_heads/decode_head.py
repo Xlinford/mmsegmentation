@@ -274,9 +274,9 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
                 align_corners=self.align_corners)
 
         if self.sampler is not None:
-            seg_weight1 = self.sampler.sample(seg_logit, gt_semantic_seg)
+            seg_weight = self.sampler.sample(seg_logit, gt_semantic_seg)
         else:
-            seg_weight1 = None
+            seg_weight = None
         gt_semantic_seg = gt_semantic_seg.squeeze(1)
         loss['loss_seg'] = self.loss_decode(
             seg_logits1,
@@ -284,7 +284,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             seg_logit,
             gt_semantic_seg,
             img_metas,
-            weight=seg_weight1,
+            weight=seg_weight,
             ignore_index=self.ignore_index)
         # loss['loss_seg'] = self.loss_decode1(
         #                     seg_logits1,
