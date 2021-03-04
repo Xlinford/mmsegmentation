@@ -320,6 +320,7 @@ class PixelwiseContrastiveLoss(nn.Module):
             reduction=reduction,
             avg_factor=avg_factor,
             **kwargs)
+        ipdb.set_trace()
         loss1 = sum(loss)
         loss2 = self.loss_weight * loss1 + loss_cls
 
