@@ -170,7 +170,7 @@ class PixelwiseContrastiveLoss(nn.Module):
         self.reduction = reduction
         self.loss_weight = loss_weight
         self.class_weight = class_weight
-        self.temp = 10
+        self.temp = 50
         if self.use_sigmoid:
             self.cls_criterion = binary_cross_entropy
         elif self.use_mask:
