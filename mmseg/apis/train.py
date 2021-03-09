@@ -116,9 +116,9 @@ def train_segmentor(model,
         runner.load_checkpoint(cfg.load_from)
     if 'semi_train' in cfg.data.keys():
         epoch_max_iters = len(data_loaders[1])
-        zipdata = ZipDataset(data_loaders)
+        # zipdata = ZipDataset(data_loaders)
         data_loaders = iter(zip(cycle(data_loaders[0]), data_loaders[1]))
-        data_loaders = [zipdata.zip_dataset_length(data_loaders)]
+        # data_loaders = [zipdata.zip_dataset_length(data_loaders)]
         runner.run(data_loaders, cfg.workflow, epoch_max_iters=epoch_max_iters)
     else:
         runner.run(data_loaders, cfg.workflow)
