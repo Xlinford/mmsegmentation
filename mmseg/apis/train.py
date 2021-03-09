@@ -9,7 +9,7 @@ from mmcv.runner import build_optimizer, build_runner
 
 from mmseg.core import DistEvalHook, EvalHook
 from mmseg.datasets import build_dataloader, build_dataset
-from mmseg.utils import get_root_logger
+from mmseg.utils import get_root_logger, ZipDataset
 
 
 def set_random_seed(seed, deterministic=False):
@@ -116,7 +116,9 @@ def train_segmentor(model,
         runner.load_checkpoint(cfg.load_from)
     if 'semi_train' in cfg.data.keys():
         epoch_max_iters = len(data_loaders[1])
-        data_loaders = [iter(zip(cycle(data_loaders[0]), data_loaders[1]))]
+        ZipDataset(data_loaders)
+        data_loaders = iter(zip(cycle(data_loaders[0]), data_loaders[1]))
+        data_loaders = [ZipDataset.zip_dataset_length(data_loaders)]
         runner.run(data_loaders, cfg.workflow, epoch_max_iters=epoch_max_iters)
     else:
         runner.run(data_loaders, cfg.workflow)
