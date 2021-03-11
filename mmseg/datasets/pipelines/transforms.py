@@ -950,7 +950,7 @@ class RandomMIOUCrop(object):
 
     def crop_region_check(self, offset_corner_y, offset_corner_x, crop_2, img):
         """Check crop region is satisfying IOU and image size or not"""
-        crop_intersection = (self.crop_size[0] - offset_corner_y) * (self.crop_size[1] - offset_corner_x)
+        crop_intersection = (self.crop_size[0] - abs(offset_corner_y)) * (self.crop_size[1] - abs(offset_corner_x))
         IOU_size = crop_intersection / (2 * self.crop_size[0] * self.crop_size[1] - crop_intersection)
 
         y1, y2, x1, x2 = crop_2
