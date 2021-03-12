@@ -287,7 +287,6 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             img_metas,
             weight=seg_weight,
             ignore_index=self.ignore_index)
-        print_log(f"{loss['loss_seg']}", logger=get_root_logger())
 
         # loss['loss_seg'] = self.loss_decode1(
         #                     seg_logits1,

@@ -322,6 +322,7 @@ class PixelwiseContrastiveLoss(nn.Module):
             **kwargs)
         loss1 = sum(loss) / len(pos_feats)
         loss2 = self.loss_weight * loss1 + loss_cls
+        print_log(f"seg_loss-{loss2},con_los-{loss1}", logger=get_root_logger())
 
         return loss2
 
