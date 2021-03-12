@@ -320,7 +320,7 @@ class PixelwiseContrastiveLoss(nn.Module):
             reduction=reduction,
             avg_factor=avg_factor,
             **kwargs)
-        loss1 = sum(loss)
+        loss1 = sum(loss) / len(pos_feats)
         loss2 = self.loss_weight * loss1 + loss_cls
 
         return loss2
