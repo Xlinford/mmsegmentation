@@ -326,4 +326,81 @@ class PixelwiseContrastiveLoss(nn.Module):
         return loss2
 
 
+@LOSSES.register_module()
+class PatchwiseContrastiveLoss(nn.Module):
+    """PatchwiseContrastiveLoss contained CrossEntropyLoss.
 
+    Args:
+        use_sigmoid (bool, optional): Whether the prediction uses sigmoid
+            of softmax. Defaults to False.
+        use_mask (bool, optional): Whether to use mask cross entropy loss.
+            Defaults to False.
+        reduction (str, optional): . Defaults to 'mean'.
+            Options are "none", "mean" and "sum".
+        class_weight (list[float], optional): Weight of each class.
+            Defaults to None.
+        loss_weight (float, optional): Weight of the loss. Defaults to 1.0.
+    """
+    def __init__(self,
+                 use_sigmoid=False,
+                 use_mask=False,
+                 reduction='mean',
+                 class_weight=None,
+                 loss_weight=0.1,
+                 patch_size=16,):
+        super(PatchwiseContrastiveLoss, self).__init__()
+        assert (use_sigmoid is False) or (use_mask is False)
+        self.use_sigmoid = use_sigmoid
+        self.use_mask = use_mask
+        self.reduction = reduction
+        self.loss_weight = loss_weight
+        self.class_weight = class_weight
+        self.patch_size = patch_size
+        self.temp = 50
+        if self.use_sigmoid:
+            self.cls_criterion = binary_cross_entropy
+        elif self.use_mask:
+            self.cls_criterion = mask_cross_entropy
+        else:
+            self.cls_criterion = cross_entropy
+
+    def cross_class(self, cls_score, label):
+        b, h, w = label.shape
+        cls_result = torch.argmax(cls_score, dim=1)  # [b,h,w]
+        diff = torch.eq(cls_result-label, 0)  # [b,h,w] same:True; different:False
+        invert_diff = ~diff
+        import ipdb
+        ipdb.set_trace()
+        class_cross_region = {}
+        for i in range(b):
+            var = set(torch.reshape(label[i, :, :], (1, -1)).cpu().numpy()[0].tolist())  # optimize
+            for j in var:
+                TT = (cls_result[i, :, :] == j)*diff[i, :, :]
+                FT = (cls_result[i, :, :] == j)*invert_diff[i, :, :]
+                var = set(torch.reshape(FT[i, :, :], (1, -1)).cpu().numpy()[0].tolist())  # optimize
+
+                a = 0
+
+
+        return class_cross_region
+
+    def forward(self,
+                cls_score,
+                label,
+                weight=None,
+                avg_factor=None,
+                reduction_override=None,
+                **kwargs):
+        """Forward function belong cross region.
+
+        Args:
+            cls_score:
+            label:
+            weight:
+            avg_factor:
+            reduction_override:
+        """
+
+        class_cross_region = self.cross_class(cls_score, label)
+
+        return 3
