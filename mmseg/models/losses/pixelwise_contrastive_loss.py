@@ -451,9 +451,12 @@ class PatchwiseContrastiveLoss(nn.Module):
             avg_factor:
             reduction_override:
         """
+        e = 30
+        self.temp = 10
         b, c, _, _ = cls_score.shape
         # b_ft_cross_region1, b_tt_region1 = self.batch_cross_class(cls_score, label)
         b_ft_cross_region, b_tt_region_score = self.cross_class(cls_score, label, b)
+        logits = torch.zeros(1, device=cls_score.device)
         for i in range(b):
             ft_cross_region = b_ft_cross_region[i]
             tt_region_score = b_tt_region_score[i]
@@ -468,56 +471,52 @@ class PatchwiseContrastiveLoss(nn.Module):
                 phi2_light = phi2[phi2.sum(dim=1) != 0]  # [21, length2]
                 cross_score = cls_score[i, :, :, :] * (torch.stack([value for i in range(c)], dim=0))
                 cross_score = torch.reshape(cross_score, (21, -1))
-                cross_score_light = cross_score[cross_score.sum(dim=1) != 0]  # [21, length2]
-                _, n = cross_score_light.shape
-                for step in range((n - 1) // 30 + 1):
-
-                neg_scores = torch.exp((phi1_light.T @ cross_score_light) / self.temp).sum(0)
-                pos_scores = torch.exp((phi2_light.T @ cross_score_light) / self.temp).sum(0)
+                cross_score_light = cross_score[cross_score.sum(dim=1) != 0]  # [21, length]
+                _, n1 = phi1_light.shape
+                _, n2 = phi2_light.shape
+                neg_scores = torch.zeros(cross_score_light.size(1), device=cross_score_light.device)
+                pos_scores = torch.zeros(cross_score_light.size(1), device=cross_score_light.device)
+                for step in range((n1 - 1) // e + 1):
+                    phi1_light_step = phi1_light[:, step * e:(step + 1) * e]  # [21,e]
+                    phi2_light_step = phi2_light[:, step * e:(step + 1) * e]  # [21,e]
+                    neg_scores_step, pos_scores_step = torch.utils.checkpoint.checkpoint(
+                        self.calc_logits,
+                        phi1_light_step,  # [21,e]
+                        phi2_light_step,  # [21,e]
+                        cross_score_light)  # [21,length]
+                    neg_scores += neg_scores_step
+                    pos_scores += pos_scores_step
                 ipdb.set_trace()
+                logits += torch.log(pos_scores / (neg_scores + 1e-8) + 1e-8).sum()
+        logits = logits/b
 
-                logits = pos_scores / (neg_scores + 1e-8)
+        assert reduction_override in (None, 'none', 'mean', 'sum')
+        reduction = (
+            reduction_override if reduction_override else self.reduction)
+        if self.class_weight is not None:
+            class_weight = cls_score.new_tensor(self.class_weight)
+        else:
+            class_weight = None
+        loss_cls = self.cls_criterion(
+            cls_score,
+            label,
+            weight,
+            class_weight=class_weight,
+            reduction=reduction,
+            avg_factor=avg_factor,
+            **kwargs)
+        loss2 = self.loss_weight * logits + loss_cls
+        print_log(f"seg_loss-{loss2},pwc_los-{logits}", logger=get_root_logger())
+
+        return loss2
+
+    def calc_logits(self, phi1_light_step, phi2_light_step, cross_score_light_step):
+
+        # [e,21]*[21,length]--->[e,length]--->[length]
+        neg_scores = torch.exp((phi1_light_step.T @ cross_score_light_step) / self.temp).sum(0)
+        pos_scores = torch.exp((phi2_light_step.T @ cross_score_light_step) / self.temp).sum(0)
+
+        return neg_scores, pos_scores
 
 
-        """pickle save
-        import pickle
-        with open("b_ft_cross_region.txt", "wb") as f:
-            for dic in b_ft_cross_region:
-                for key, value in dic.items():
-                    pickle.dump(key, f)
-                    pickle.dump(value.cpu().numpy(), f)
-                    break
-                break
-        with open("b_tt_region.txt", "wb") as f:
-            for dic in b_ft_cross_region:
-                for key, value in dic.items():
-                    pickle.dump(key, f)
-                    pickle.dump(value.cpu().numpy(), f)
-                    break
-                break
-        with open("cls_score.txt", "wb") as f:
-            pickle.dump(cls_score.detach().cpu().numpy(), f)
-        with open("label.txt", "wb") as f:
-            pickle.dump(label.cpu().numpy(), f)
-        """
-        """Numpy save
-        
-        import numpy as np
-        for dic in b_ft_cross_region:
-            for key, value in dic.items():
-                np.savetxt('b_ft_cross_region.txt', value[0].cpu().numpy(), fmt='%i')
-                break
-            break
-        for dic in b_tt_region:
-            for key, value in dic.items():
-                np.savetxt('b_tt_region.txt', value[0].detach().cpu().numpy(), fmt='%i')
-                break
-            break
 
-        np.savetxt('cls_score.txt', torch.argmax(cls_score, dim=1)[0].detach().cpu().numpy(), fmt='%i')
-        np.savetxt('label.txt', label[0].cpu().numpy(), fmt='%i')
-
-        ipdb.set_trace()
-        """
-
-        return 3
