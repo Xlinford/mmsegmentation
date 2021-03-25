@@ -367,16 +367,21 @@ class PatchwiseContrastiveLoss(nn.Module):
     def cross_class(self, cls_score, label):
         b, h, w = label.shape
         cls_result = torch.argmax(cls_score, dim=1)  # [b,h,w]
-        diff = torch.eq(cls_result-label, 0)  # [b,h,w] same:True; different:False
-        invert_diff = ~diff
+        diff = torch.eq(cls_result-label, 0).int()  # [b,h,w] same:True,1; different:False,0
+        invert_diff = 1-diff  # bool can use ~
         import ipdb
         ipdb.set_trace()
         class_cross_region = {}
         for i in range(b):
+            # var: lists of labels' class 
             var = set(torch.reshape(label[i, :, :], (1, -1)).cpu().numpy()[0].tolist())  # optimize
             for j in var:
-                TT = (cls_result[i, :, :] == j)*diff[i, :, :]
+                FT = torch.as_tensor(cls_result)
+                # TT: for class j, cls_result right recglise
+                TT = (cls_result[i, :, :] == j)*diff[i, :, :]  
+                # FT: for class j, cls_result false recglise, may contain other class
                 FT = (cls_result[i, :, :] == j)*invert_diff[i, :, :]
+                cls_FT = label[i,:,:] *FT
                 var = set(torch.reshape(FT[i, :, :], (1, -1)).cpu().numpy()[0].tolist())  # optimize
 
                 a = 0
