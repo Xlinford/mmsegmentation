@@ -33,13 +33,13 @@ test_pipeline = [
 ]
 data = dict(
     samples_per_gpu=4,
-    workers_per_gpu=0,
+    workers_per_gpu=4,
     train=dict(
         type=dataset_type,
         data_root=data_root,
         img_dir='JPEGImages',
         ann_dir='SegmentationClassAug',
-        split='ImageSets/Segmentation/800_train_supervised.txt',
+        split='ImageSets/Segmentation/train.txt',
         pipeline=train_pipeline),
     val=dict(
         type=dataset_type,

@@ -4,7 +4,7 @@ from torch.nn import BatchNorm1d
 import torch.nn.functional as F
 from torchvision import transforms
 import ipdb
-
+from time import time
 from ..builder import LOSSES
 from .utils import weight_reduce_loss
 from mmcv.utils import print_log
@@ -366,8 +366,44 @@ class PatchwiseContrastiveLoss(nn.Module):
 
     def cross_class(self, cls_score, label, b):
         # b, h, w = label.shape
-        cls_result = torch.argmax(cls_score, dim=1)  # [b,h,w]
-        diff = torch.eq(cls_result-label, 0).int()  # [b,h,w] same:True,1; different:False,0
+        cls_result = torch.argmax(cls_score, dim=1).detach()  # [b,h,w]
+        diff = torch.eq(cls_result-label, 0).int().detach()  # [b,h,w] same:True,1; different:False,0
+        invert_diff = 1 - diff  # bool can use ~
+        b_ft_cross_region = [i for i in range(b)]
+        b_tt_region = b_ft_cross_region.copy()
+
+        for i in range(b):
+            ft_cross_region = {}
+            tt_region = {}
+            # lists_labels_class: lists of labels' class
+            lists_labels_class = set(torch.reshape(label[i, :, :], (1, -1)).cpu().numpy()[0].tolist())  # optimize
+            for j in lists_labels_class:
+                # tt: for class j, cls_result right classify,[h,w]
+                tt = (cls_result[i, :, :] == j)*diff[i, :, :]  # bool
+                # ft: for class j, cls_result false classify, may contain other class,[h,w]
+                ft = (cls_result[i, :, :] == j)*invert_diff[i, :, :]  # bool
+                cls_tt = cls_score[i, :, :] * tt
+                cls_ft = label[i, :, :] * ft
+                tt_region[str(j)] = cls_tt
+                var = set(torch.reshape(cls_ft, (1, -1)).cpu().numpy()[0].tolist())  # optimize
+                # 网络输出为j，GT为k，ft_cross_region[cross_class]取得cross_class的位置
+                # 先找出k类的位置，再找出错分为j的位置
+                for k in var:
+                    if k != j:
+                        cross_class = str(j) + '/' + str(k)
+                        if cross_class in ft_cross_region.keys():
+                            ft_cross_region[cross_class] += ((label[i, :, :] == k)*ft).detach()
+                        else:
+                            ft_cross_region[cross_class] = ((label[i, :, :] == k)*ft).detach()
+            b_ft_cross_region[i] = ft_cross_region
+            b_tt_region[i] = tt_region
+
+        return b_ft_cross_region, b_tt_region
+
+    def batch_cross_class(self, cls_score, label, b):
+        # b, h, w = label.shape
+        cls_result = torch.argmax(cls_score, dim=1).detach()  # [b,h,w]
+        diff = torch.eq(cls_result-label, 0).int().detach()  # [b,h,w] same:True,1; different:False,0
         invert_diff = 1 - diff  # bool can use ~
         b_ft_cross_region = [i for i in range(b)]
         b_tt_region = b_ft_cross_region.copy()
@@ -400,41 +436,6 @@ class PatchwiseContrastiveLoss(nn.Module):
 
         return b_ft_cross_region, b_tt_region
 
-    # def batch_cross_class(self, cls_score, label):
-    #     b, h, w = label.shape
-    #     cls_result = torch.argmax(cls_score, dim=1)  # [b,h,w]
-    #     diff = torch.eq(cls_result-label, 0).int()  # [b,h,w] same:True,1; different:False,0
-    #     invert_diff = 1 - diff  # bool can use ~
-    #     import ipdb
-    #     ipdb.set_trace()
-    #
-    #     ft_cross_region = {}
-    #     tt_region = {}
-    #     # lists_labels_class: lists of labels' class
-    #     lists_labels_class = set(torch.reshape(label[:, :, :], (1, -1)).cpu().numpy()[0].tolist())  # optimize
-    #     for j in lists_labels_class:
-    #         # tt: for class j, cls_result right classify,[h,w]
-    #         tt = (cls_result[:, :, :] == j)*diff[:, :, :]
-    #         # ft: for class j, cls_result false classify, may contain other class,[h,w]
-    #         ft = (cls_result[:, :, :] == j)*invert_diff[:, :, :]
-    #         cls_tt = cls_score[:, :, :] * tt
-    #         cls_ft = label[:, :, :] * ft
-    #         tt_region[str(j)] = cls_tt
-    #         var = set(torch.reshape(cls_ft, (1, -1)).cpu().numpy()[0].tolist())  # optimize
-    #         # 网络输出为j，GT为k，ft_cross_region[cross_class]取得cross_class的位置
-    #         # 先找出k类的位置，再找出错分为j的位置
-    #         for k in var:
-    #             if k > j:
-    #                 cross_class = str(j)+str(k)
-    #                 if cross_class in ft_cross_region.keys():
-    #                     ft_cross_region[cross_class] += (label == k)*ft
-    #                 else:
-    #                     ft_cross_region[cross_class] = (label == k)*ft
-    #     b_ft_cross_region = ft_cross_region
-    #     b_tt_region = tt_region
-    #
-    #     return b_ft_cross_region, b_tt_region
-
     def forward(self,
                 cls_score,
                 label,
@@ -453,43 +454,8 @@ class PatchwiseContrastiveLoss(nn.Module):
         """
         e = 30
         self.temp = 10
-        b, c, _, _ = cls_score.shape
-        # b_ft_cross_region1, b_tt_region1 = self.batch_cross_class(cls_score, label)
-        b_ft_cross_region, b_tt_region_score = self.cross_class(cls_score, label, b)
-        logits = torch.zeros(1, device=cls_score.device)
-        for i in range(b):
-            ft_cross_region = b_ft_cross_region[i]
-            tt_region_score = b_tt_region_score[i]
-            for key, value in ft_cross_region.items():
-                # class b classify incorrectly into a
-                a, b = key.split('/', 1)
-                phi1 = tt_region_score[a]
-                phi2 = tt_region_score[b]
-                phi1 = torch.reshape(phi1, (21, -1))
-                phi2 = torch.reshape(phi2, (21, -1))
-                phi1_light = phi1[phi1.sum(dim=1) != 0]  # [21, length1]
-                phi2_light = phi2[phi2.sum(dim=1) != 0]  # [21, length2]
-                cross_score = cls_score[i, :, :, :] * (torch.stack([value for i in range(c)], dim=0))
-                cross_score = torch.reshape(cross_score, (21, -1))
-                cross_score_light = cross_score[cross_score.sum(dim=1) != 0]  # [21, length]
-                _, n1 = phi1_light.shape
-                _, n2 = phi2_light.shape
-                neg_scores = torch.zeros(cross_score_light.size(1), device=cross_score_light.device)
-                pos_scores = torch.zeros(cross_score_light.size(1), device=cross_score_light.device)
-                for step in range((n1 - 1) // e + 1):
-                    phi1_light_step = phi1_light[:, step * e:(step + 1) * e]  # [21,e]
-                    phi2_light_step = phi2_light[:, step * e:(step + 1) * e]  # [21,e]
-                    neg_scores_step, pos_scores_step = torch.utils.checkpoint.checkpoint(
-                        self.calc_logits,
-                        phi1_light_step,  # [21,e]
-                        phi2_light_step,  # [21,e]
-                        cross_score_light)  # [21,length]
-                    neg_scores += neg_scores_step
-                    pos_scores += pos_scores_step
-                ipdb.set_trace()
-                logits += torch.log(pos_scores / (neg_scores + 1e-8) + 1e-8).sum()
-        logits = logits/b
-
+        count = 0
+        t1 = time()
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
@@ -505,18 +471,64 @@ class PatchwiseContrastiveLoss(nn.Module):
             reduction=reduction,
             avg_factor=avg_factor,
             **kwargs)
+
+        b, c, _, _ = cls_score.shape
+        # b_ft_cross_region1, b_tt_region1 = self.batch_cross_class(cls_score, label)
+        b_ft_cross_region, b_tt_region_score = self.cross_class(cls_score, label, b)
+        logits = torch.zeros(1, device=cls_score.device)
+
+        for i in range(b):
+            ft_cross_region = b_ft_cross_region[i]
+            tt_region_score = b_tt_region_score[i]
+            for key, value in ft_cross_region.items():
+                # class b classify incorrectly into a
+                class_key1, class_key2 = key.split('/', 1)
+                phi1 = tt_region_score[class_key1]
+                phi2 = tt_region_score[class_key2]
+                phi1 = torch.reshape(phi1, (21, -1))
+                phi2 = torch.reshape(phi2, (21, -1))
+                phi1_light = phi1[:, phi1.sum(dim=0) != 0].detach()  # [21, length1]
+                phi2_light = phi2[:, phi2.sum(dim=0) != 0].detach()  # [21, length2]
+                cross_score = cls_score[i, :, :, :] * (torch.stack([value for i in range(c)], dim=0))
+                cross_score = torch.reshape(cross_score, (21, -1))
+                cross_score_light = cross_score[:, cross_score.sum(dim=0) != 0]  # [21, length]
+                _, n1 = phi1_light.shape
+                _, n2 = phi2_light.shape
+                neg_scores = torch.zeros(cross_score_light.size(1), device=cross_score_light.device)
+                pos_scores = torch.zeros(cross_score_light.size(1), device=cross_score_light.device)
+                for step in range((n2 - 1) // e + 1):
+                    phi2_light_step = phi2_light[:, step * e:(step + 1) * e]  # [21,e]
+                    pos_scores_step = torch.utils.checkpoint.checkpoint(
+                        self.calc_logits,
+                        phi2_light_step,  # [21,e]
+                        cross_score_light)  # [21,length]
+                    pos_scores += pos_scores_step
+                for step in range((n1 - 1) // e + 1):
+                    phi1_light_step = phi1_light[:, step * e:(step + 1) * e]  # [21,e]
+                    neg_scores_step = torch.utils.checkpoint.checkpoint(
+                        self.calc_logits,
+                        phi1_light_step,  # [21,e]
+                        cross_score_light)  # [21,length]
+                    neg_scores += neg_scores_step
+
+                logits += torch.log(pos_scores / (neg_scores + 1e-8) + 1e-8).sum()
+                count += 1
+        logits = torch.log(-logits)/count
+
+
         loss2 = self.loss_weight * logits + loss_cls
         print_log(f"seg_loss-{loss2},pwc_los-{logits}", logger=get_root_logger())
-
+        ipdb.set_trace()
         return loss2
 
-    def calc_logits(self, phi1_light_step, phi2_light_step, cross_score_light_step):
+    def calc_logits(self, light_step, cross_score_light_step):
 
         # [e,21]*[21,length]--->[e,length]--->[length]
-        neg_scores = torch.exp((phi1_light_step.T @ cross_score_light_step) / self.temp).sum(0)
-        pos_scores = torch.exp((phi2_light_step.T @ cross_score_light_step) / self.temp).sum(0)
 
-        return neg_scores, pos_scores
+        # scores = torch.exp((light_step.T @ cross_score_light_step) / self.temp).sum(0)
+        scores = torch.sum(torch.exp((light_step.T @ cross_score_light_step) / self.temp), dim=0)
+
+        return scores
 
 
 

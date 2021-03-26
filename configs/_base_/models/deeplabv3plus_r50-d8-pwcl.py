@@ -27,7 +27,7 @@ model = dict(
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=dict(
-            type='PatchwiseContrastiveLoss', use_sigmoid=False, loss_weight=1.0)),
+            type='PatchwiseContrastiveLoss', use_sigmoid=False, loss_weight=0.1)),
     auxiliary_head=dict(
         type='FCNHead',
         in_channels=1024,
