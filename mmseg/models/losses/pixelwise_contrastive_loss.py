@@ -366,75 +366,90 @@ class PatchwiseContrastiveLoss(nn.Module):
 
     def cross_class(self, cls_score, label, b):
         # b, h, w = label.shape
-        cls_result = torch.argmax(cls_score, dim=1).detach()  # [b,h,w]
+        cls_result = torch.argmax(cls_score, dim=1).detach() + 1  # [b,h,w]
+        label = label + 1
         diff = torch.eq(cls_result-label, 0).int().detach()  # [b,h,w] same:True,1; different:False,0
         invert_diff = 1 - diff  # bool can use ~
         b_ft_cross_region = [i for i in range(b)]
         b_tt_region = b_ft_cross_region.copy()
-
+        b_cross_class = b_ft_cross_region.copy()
+        b_tt_class = b_ft_cross_region.copy()
         for i in range(b):
-            ft_cross_region = {}
-            tt_region = {}
+            ft_cross_region = []
+            tt_region = []
+            tt_class = []
+            cross_class = []
             # lists_labels_class: lists of labels' class
             lists_labels_class = set(torch.reshape(label[i, :, :], (1, -1)).cpu().numpy()[0].tolist())  # optimize
-            for j in lists_labels_class:
+            for step, j in enumerate(lists_labels_class):
+                if j == 256:
+                    continue
                 # tt: for class j, cls_result right classify,[h,w]
                 tt = (cls_result[i, :, :] == j)*diff[i, :, :]  # bool
                 # ft: for class j, cls_result false classify, may contain other class,[h,w]
                 ft = (cls_result[i, :, :] == j)*invert_diff[i, :, :]  # bool
-                cls_tt = cls_score[i, :, :] * tt
+                cls_tt = cls_score[i, :, :, :] * tt
                 cls_ft = label[i, :, :] * ft
-                tt_region[str(j)] = cls_tt
+                if len(tt_region) == 0:
+                    tt_region = [cls_tt]
+                    tt_class = [j]
+                else:
+                    tt_region.extend([cls_tt])
+                    tt_class.append(j)
                 var = set(torch.reshape(cls_ft, (1, -1)).cpu().numpy()[0].tolist())  # optimize
                 # 网络输出为j，GT为k，ft_cross_region[cross_class]取得cross_class的位置
                 # 先找出k类的位置，再找出错分为j的位置
                 for k in var:
-                    if k != j:
-                        cross_class = str(j) + '/' + str(k)
-                        if cross_class in ft_cross_region.keys():
-                            ft_cross_region[cross_class] += ((label[i, :, :] == k)*ft).detach()
-                        else:
-                            ft_cross_region[cross_class] = ((label[i, :, :] == k)*ft).detach()
+                    if k == 256 or k == 0:
+                        continue
+                    if len(ft_cross_region) == 0:
+                        ft_cross_region = [(label[i, :, :] == k)*ft]  # [h,w]
+                        cross_class = [str(j) + '/' + str(k)]
+                    else:
+                        ft_cross_region.extend([(label[i, :, :] == k)*ft])
+                        cross_class.append(str(j) + '/' + str(k))
+            tt_region = torch.stack(tt_region, dim=-1)  # [c, h, w, TT_class]
+            ft_cross_region = torch.stack(ft_cross_region, dim=-1)  # [h,w,class]
             b_ft_cross_region[i] = ft_cross_region
+            b_cross_class[i] = cross_class
             b_tt_region[i] = tt_region
-
-        return b_ft_cross_region, b_tt_region
+            b_tt_class[i] = tt_class
+        #b_ft_cross_region = torch.cat(b_ft_cross_region, dim=-1)  # [h,w,class]
+        #b_tt_region = torch.cat(b_tt_region, dim=-1)  # [h,w,class]
+        return b_ft_cross_region, b_tt_region, b_cross_class, b_tt_class
 
     def batch_cross_class(self, cls_score, label, b):
-        # b, h, w = label.shape
-        cls_result = torch.argmax(cls_score, dim=1).detach()  # [b,h,w]
+        b, c, h, w = cls_score.shape
+        cls_result = torch.argmax(cls_score, dim=1)  # [b,h,w]
         diff = torch.eq(cls_result-label, 0).int().detach()  # [b,h,w] same:True,1; different:False,0
         invert_diff = 1 - diff  # bool can use ~
-        b_ft_cross_region = [i for i in range(b)]
-        b_tt_region = b_ft_cross_region.copy()
-
+        b_ft_cross_region = []
+        b_tt_region = []
+        batch_class = [i for i in range(b)]
+        full_class = set()
+        full_class_dict = {}
         for i in range(b):
-            ft_cross_region = {}
-            tt_region = {}
-            # lists_labels_class: lists of labels' class
-            lists_labels_class = set(torch.reshape(label[i, :, :], (1, -1)).cpu().numpy()[0].tolist())  # optimize
-            for j in lists_labels_class:
-                # tt: for class j, cls_result right classify,[h,w]
-                tt = (cls_result[i, :, :] == j)*diff[i, :, :]
-                # ft: for class j, cls_result false classify, may contain other class,[h,w]
-                ft = (cls_result[i, :, :] == j)*invert_diff[i, :, :]
-                cls_tt = cls_score[i, :, :] * tt
-                cls_ft = label[i, :, :] * ft
-                tt_region[str(j)] = cls_tt
-                var = set(torch.reshape(cls_ft, (1, -1)).cpu().numpy()[0].tolist())  # optimize
-                # 网络输出为j，GT为k，ft_cross_region[cross_class]取得cross_class的位置
-                # 先找出k类的位置，再找出错分为j的位置
-                for k in var:
-                    if k != j:
-                        cross_class = str(j) + '/' + str(k)
-                        if cross_class in ft_cross_region.keys():
-                            ft_cross_region[cross_class] += ((label[i, :, :] == k)*ft).detach()
-                        else:
-                            ft_cross_region[cross_class] = ((label[i, :, :] == k)*ft).detach()
-            b_ft_cross_region[i] = ft_cross_region
-            b_tt_region[i] = tt_region
+            batch_class[i] = set(torch.reshape(label[i, :, :], (1, -1)).cpu().numpy()[0].tolist())  # optimize
+            full_class = full_class | batch_class[i]
+        for step, j in enumerate(full_class):
+            full_class_dict[j] = step
+            j_class = (cls_result == j)
+            # tt: for class j, cls_result right classify,[h,w]
+            tt = j_class * diff  # bool [b,h,w]
+            # ft: for class j, cls_result false classify, may contain other class,[h,w]
+            ft = j_class * invert_diff  # bool
+            cls_tt = cls_result * tt.unsqueeze(1)
+            cls_ft = label * ft
+            if step != 0:
+                b_tt_region = b_tt_region.append(cls_tt)
+                b_ft_cross_region = b_ft_cross_region.append(cls_ft)
+            else:
+                b_tt_region = [cls_tt]
+                b_ft_cross_region = [cls_ft]
+        b_tt_region = torch.stack(b_tt_region, dim=-1)  # [b, c, h, w, class]
 
-        return b_ft_cross_region, b_tt_region
+
+        return b_ft_cross_region, b_tt_region, full_class_dict
 
     def forward(self,
                 cls_score,
@@ -474,9 +489,29 @@ class PatchwiseContrastiveLoss(nn.Module):
 
         b, c, _, _ = cls_score.shape
         # b_ft_cross_region1, b_tt_region1 = self.batch_cross_class(cls_score, label)
-        b_ft_cross_region, b_tt_region_score = self.cross_class(cls_score, label, b)
-        logits = torch.zeros(1, device=cls_score.device)
+        b_ft_cross_region, b_tt_region_score, b_cross_class, b_tt_class = self.cross_class(cls_score, label, b)
 
+        logits = torch.zeros(1, device=cls_score.device)
+        ipdb.set_trace()
+        for i in range(b):
+            cross_class = b_cross_class[i]
+            for j, key in enumerate(cross_class):
+                class_key1, class_key2 = key.split('/', 1)
+                tt_index1 = b_tt_class[i].index(class_key1)
+                tt_index2 = b_tt_class[i].index(class_key2)
+
+                phi1 = b_tt_region_score[i][:, :, tt_index1]
+                phi2 = b_tt_region_score[i][:, :, tt_index2]
+                phi1 = torch.reshape(phi1, (21, -1))
+                phi2 = torch.reshape(phi2, (21, -1))
+                phi1_light = phi1[:, phi1.sum(dim=0) != 0].detach()  # [21, length1]
+                phi2_light = phi2[:, phi2.sum(dim=0) != 0].detach()  # [21, length2]
+                cross_score = cls_score[i, :, :, :] * b_ft_cross_region[i][:, :, j]
+                cross_score = torch.reshape(cross_score, (21, -1))
+                cross_score_light = cross_score[:, cross_score.sum(dim=0) != 0]  # [21, length]
+                pos_scores = F.kl_div(cross_score_light, phi2_light, reduction='mean')
+                neg_scores = F.kl_div(cross_score_light, phi1_light, reduction='mean')
+                ipdb.set_trace()
         for i in range(b):
             ft_cross_region = b_ft_cross_region[i]
             tt_region_score = b_tt_region_score[i]
