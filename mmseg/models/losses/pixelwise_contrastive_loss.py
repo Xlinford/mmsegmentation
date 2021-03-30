@@ -408,8 +408,14 @@ class PatchwiseContrastiveLoss(nn.Module):
                     else:
                         ft_cross_region.extend([(label[i, :, :] == k)*ft])
                         cross_class.append(str(j) + '/' + str(k))
-            tt_region = torch.stack(tt_region, dim=-1)  # [c, h, w, TT_class]
-            ft_cross_region = torch.stack(ft_cross_region, dim=-1)  # [h,w,class]
+            try:
+                tt_region = torch.stack(tt_region, dim=-1)  # [c, h, w, TT_class]
+            except:
+                tt_region = []
+            try:
+                ft_cross_region = torch.stack(ft_cross_region, dim=-1)  # [h,w,class]
+            except:
+                ft_cross_region = []
             b_ft_cross_region[i] = ft_cross_region
             b_cross_class[i] = cross_class
             b_tt_region[i] = tt_region
@@ -417,6 +423,7 @@ class PatchwiseContrastiveLoss(nn.Module):
         #b_ft_cross_region = torch.cat(b_ft_cross_region, dim=-1)  # [h,w,class]
         #b_tt_region = torch.cat(b_tt_region, dim=-1)  # [h,w,class]
         return b_ft_cross_region, b_tt_region, b_cross_class, b_tt_class
+
 
     def batch_cross_class(self, cls_score, label, b):
         b, c, h, w = cls_score.shape
@@ -469,7 +476,7 @@ class PatchwiseContrastiveLoss(nn.Module):
         """
         e = 30
         self.temp = 10
-        count = 0
+        count = 1
         t1 = time()
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
@@ -491,17 +498,16 @@ class PatchwiseContrastiveLoss(nn.Module):
         # b_ft_cross_region1, b_tt_region1 = self.batch_cross_class(cls_score, label)
         b_ft_cross_region, b_tt_region_score, b_cross_class, b_tt_class = self.cross_class(cls_score, label, b)
 
-        logits = torch.zeros(1, device=cls_score.device)
-        ipdb.set_trace()
+        logits = [torch.zeros(1, device=cls_score.device) for b_logits in range(b)]
         for i in range(b):
             cross_class = b_cross_class[i]
             for j, key in enumerate(cross_class):
                 class_key1, class_key2 = key.split('/', 1)
-                tt_index1 = b_tt_class[i].index(class_key1)
-                tt_index2 = b_tt_class[i].index(class_key2)
+                tt_index1 = b_tt_class[i].index(int(class_key1))
+                tt_index2 = b_tt_class[i].index(int(class_key2))
 
-                phi1 = b_tt_region_score[i][:, :, tt_index1]
-                phi2 = b_tt_region_score[i][:, :, tt_index2]
+                phi1 = b_tt_region_score[i][:, :, :, tt_index1]
+                phi2 = b_tt_region_score[i][:, :, :, tt_index2]
                 phi1 = torch.reshape(phi1, (21, -1))
                 phi2 = torch.reshape(phi2, (21, -1))
                 phi1_light = phi1[:, phi1.sum(dim=0) != 0].detach()  # [21, length1]
@@ -509,51 +515,51 @@ class PatchwiseContrastiveLoss(nn.Module):
                 cross_score = cls_score[i, :, :, :] * b_ft_cross_region[i][:, :, j]
                 cross_score = torch.reshape(cross_score, (21, -1))
                 cross_score_light = cross_score[:, cross_score.sum(dim=0) != 0]  # [21, length]
-                pos_scores = F.kl_div(cross_score_light, phi2_light, reduction='mean')
-                neg_scores = F.kl_div(cross_score_light, phi1_light, reduction='mean')
-                ipdb.set_trace()
-        for i in range(b):
-            ft_cross_region = b_ft_cross_region[i]
-            tt_region_score = b_tt_region_score[i]
-            for key, value in ft_cross_region.items():
-                # class b classify incorrectly into a
-                class_key1, class_key2 = key.split('/', 1)
-                phi1 = tt_region_score[class_key1]
-                phi2 = tt_region_score[class_key2]
-                phi1 = torch.reshape(phi1, (21, -1))
-                phi2 = torch.reshape(phi2, (21, -1))
-                phi1_light = phi1[:, phi1.sum(dim=0) != 0].detach()  # [21, length1]
-                phi2_light = phi2[:, phi2.sum(dim=0) != 0].detach()  # [21, length2]
-                cross_score = cls_score[i, :, :, :] * (torch.stack([value for i in range(c)], dim=0))
-                cross_score = torch.reshape(cross_score, (21, -1))
-                cross_score_light = cross_score[:, cross_score.sum(dim=0) != 0]  # [21, length]
-                _, n1 = phi1_light.shape
-                _, n2 = phi2_light.shape
-                neg_scores = torch.zeros(cross_score_light.size(1), device=cross_score_light.device)
-                pos_scores = torch.zeros(cross_score_light.size(1), device=cross_score_light.device)
-                for step in range((n2 - 1) // e + 1):
-                    phi2_light_step = phi2_light[:, step * e:(step + 1) * e]  # [21,e]
-                    pos_scores_step = torch.utils.checkpoint.checkpoint(
-                        self.calc_logits,
-                        phi2_light_step,  # [21,e]
-                        cross_score_light)  # [21,length]
-                    pos_scores += pos_scores_step
-                for step in range((n1 - 1) // e + 1):
-                    phi1_light_step = phi1_light[:, step * e:(step + 1) * e]  # [21,e]
-                    neg_scores_step = torch.utils.checkpoint.checkpoint(
-                        self.calc_logits,
-                        phi1_light_step,  # [21,e]
-                        cross_score_light)  # [21,length]
-                    neg_scores += neg_scores_step
+                phi1_length = phi1_light.shape[1]
+                phi2_length = phi2_light.shape[1]
+                cross_score_length = cross_score_light.shape[1]
+                if phi1_length <= cross_score_length:
+                    if phi1_length == 0:
+                        continue
+                    # neg_scores = F.kl_div(cross_score_light[:, 0:phi1_length], phi1_light, reduction='mean')
+                    neg_scores = torch.mean(F.cosine_similarity(cross_score_light[:, 0:phi1_length], phi1_light, dim=0))
+                else:
+                    neg_step = phi1_length // cross_score_length
+                    neg_scores = torch.zeros(cross_score_length, device=cross_score_light.device)
+                    for nk in range(neg_step):
+                        # neg_scores_step = F.kl_div(cross_score_light,
+                        #                            phi1_light[:, k * cross_score_length:(k + 1) * cross_score_length],
+                        #                            reduction='mean')
+                        neg_scores_step = F.cosine_similarity(cross_score_light,
+                                                   phi1_light[:, nk * cross_score_length:(nk + 1) * cross_score_length],
+                                                   dim=0)
+                        neg_scores += neg_scores_step
+                    neg_scores = torch.mean(neg_scores / neg_step)
 
-                logits += torch.log(pos_scores / (neg_scores + 1e-8) + 1e-8).sum()
-                count += 1
-        logits = torch.log(-logits)/count
+                if phi2_length <= cross_score_length:
+                    if phi2_length == 0:
+                        continue
+                    # pos_scores = F.kl_div(cross_score_light[:, 0:phi2_length], phi2_light, reduction='mean')
+                    pos_scores = torch.mean(F.cosine_similarity(cross_score_light[:, 0:phi2_length], phi2_light, dim=0))
+                else:
+                    pos_step = phi2_length // cross_score_length
+                    pos_scores = torch.zeros(cross_score_length, device=cross_score_light.device)
+                    for pk in range(pos_step):
+                        # pos_scores_step = F.kl_div(cross_score_light,
+                        #                            phi2_light[:, k * cross_score_length:(k + 1) * cross_score_length],
+                        #                            reduction='mean')
+                        pos_scores_step = F.cosine_similarity(cross_score_light,
+                                                   phi2_light[:, pk * cross_score_length:(pk + 1) * cross_score_length],
+                                                   dim=0)
+                        pos_scores += pos_scores_step
+                    pos_scores = torch.mean(pos_scores / pos_step)
+                logits[i] += ((neg_scores + 1) / (pos_scores + 1))
+            if cross_class:
+                logits[i] = logits[i]/len(cross_class)
 
-
+        logits = sum(logits)/b
         loss2 = self.loss_weight * logits + loss_cls
-        print_log(f"seg_loss-{loss2},pwc_los-{logits}", logger=get_root_logger())
-        ipdb.set_trace()
+        print_log(f"seg_loss-{loss_cls},pwc_los-{logits}", logger=get_root_logger())
         return loss2
 
     def calc_logits(self, light_step, cross_score_light_step):

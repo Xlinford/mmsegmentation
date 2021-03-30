@@ -233,7 +233,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
     def losses(self, seg_logit, seg_label):
         """Compute segmentation loss."""
         loss = dict()
-        seg_logit = resize(
+        seg_logit1 = resize(
             input=seg_logit,
             size=seg_label.shape[2:],
             mode='bilinear',
@@ -244,10 +244,11 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             seg_weight = None
         seg_label = seg_label.squeeze(1)
         loss['loss_seg'] = self.loss_decode(
-            seg_logit,
+            seg_logit1,
             seg_label,
             weight=seg_weight,
-            ignore_index=self.ignore_index)
+            ignore_index=self.ignore_index,
+            original_seg_logit=seg_logit)
         loss['acc_seg'] = accuracy(seg_logit, seg_label)
         return loss
 
