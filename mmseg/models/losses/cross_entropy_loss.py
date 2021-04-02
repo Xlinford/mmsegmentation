@@ -12,7 +12,8 @@ def cross_entropy(pred,
                   class_weight=None,
                   reduction='mean',
                   avg_factor=None,
-                  ignore_index=-100):
+                  ignore_index=-100,
+                  **kwargs):
     """The wrapper function for :func:`F.cross_entropy`"""
     # class_weight is a manual rescaling weight given to each class.
     # If given, has to be a Tensor of size C element-wise losses
@@ -60,7 +61,8 @@ def binary_cross_entropy(pred,
                          reduction='mean',
                          avg_factor=None,
                          class_weight=None,
-                         ignore_index=255):
+                         ignore_index=255,
+                  **kwargs):
     """Calculate the binary CrossEntropy loss.
 
     Args:
@@ -103,7 +105,8 @@ def mask_cross_entropy(pred,
                        reduction='mean',
                        avg_factor=None,
                        class_weight=None,
-                       ignore_index=None):
+                       ignore_index=None,
+                  **kwargs):
     """Calculate the CrossEntropy loss for masks.
 
     Args:

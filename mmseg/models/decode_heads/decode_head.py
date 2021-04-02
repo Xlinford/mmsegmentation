@@ -239,7 +239,7 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             mode='bilinear',
             align_corners=self.align_corners)
         if self.sampler is not None:
-            seg_weight = self.sampler.sample(seg_logit, seg_label)
+            seg_weight = self.sampler.sample(seg_logit1, seg_label)
         else:
             seg_weight = None
         seg_label = seg_label.squeeze(1)
@@ -248,8 +248,8 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
             seg_label,
             weight=seg_weight,
             ignore_index=self.ignore_index,
-            original_seg_logit=seg_logit)
-        loss['acc_seg'] = accuracy(seg_logit, seg_label)
+            original_cls_score=seg_logit)
+        loss['acc_seg'] = accuracy(seg_logit1, seg_label)
         return loss
 
     @force_fp32(apply_to=('seg_logits', 'seg_logits1', 'seg_label'))
