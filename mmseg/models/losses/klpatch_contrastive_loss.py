@@ -113,7 +113,7 @@ def mask_cross_entropy(pred,
                        avg_factor=None,
                        class_weight=None,
                        ignore_index=None,
-                  **kwargs):
+                       **kwargs):
     """Calculate the CrossEntropy loss for masks.
 
     Args:
@@ -492,10 +492,11 @@ class KLPatchContrastiveLoss(nn.Module):
 
         b, c, h, w = cls_score.shape
         _, _, h1, w1 = original_cls_score.shape
-        cal_size = h1*w1
+        cal_size = h1 * w1
         gt_seg = F.interpolate(label.unsqueeze(1).type(torch.cuda.FloatTensor), (h1, w1), mode='nearest').squeeze(1)
         gt_seg = gt_seg.type(torch.cuda.LongTensor)
-        b_ft_cross_region, b_tt_region_score, b_cross_class, b_tt_class = self.cross_class(original_cls_score, gt_seg, b)
+        b_ft_cross_region, b_tt_region_score, b_cross_class, b_tt_class = self.cross_class(original_cls_score, gt_seg,
+                                                                                           b)
 
         pos_feature = []
         neg_feature = []
@@ -519,7 +520,7 @@ class KLPatchContrastiveLoss(nn.Module):
                 phi1_length = phi1_light.shape[1]
                 phi2_length = phi2_light.shape[1]
                 cross_score_length = cross_score_light.shape[1]
-                if phi1_length*phi2_length*cross_score_length == 0:
+                if phi1_length * phi2_length * cross_score_length == 0:
                     continue
                     ipdb.set_trace()
 
@@ -535,18 +536,19 @@ class KLPatchContrastiveLoss(nn.Module):
                     neg_feature.append(reform_phi1_light)
                     cross_feature.append(reform_cross_light)
         count = len(pos_feature)
-        pos_feature = torch.stack(pos_feature, dim=0)
-        neg_feature = torch.stack(neg_feature, dim=0)
-        cross_feature = torch.stack(cross_feature, dim=0)
+        if count != 0:
+            pos_feature = torch.stack(pos_feature, dim=0)
+            neg_feature = torch.stack(neg_feature, dim=0)
+            cross_feature = torch.stack(cross_feature, dim=0)
 
-        pos_scores = F.kl_div(cross_feature, pos_feature, reduction='mean')
-        neg_feature = F.kl_div(cross_feature, neg_feature, reduction='mean')
-        pos_scores = pos_scores if pos_scores != 0 else 1
-        logits = -torch.log(pos_scores / (pos_scores + neg_feature + 1e-8)) / count
+            pos_scores = F.kl_div(cross_feature, pos_feature, reduction='mean')
+            neg_feature = F.kl_div(cross_feature, neg_feature, reduction='mean')
+            pos_scores = pos_scores if pos_scores != 0 else 1
+            logits = -torch.log(pos_scores / (pos_scores + neg_feature + 1e-8)) / count
 
-        loss2 = self.loss_weight * logits + loss_cls
+            loss_cls = self.loss_weight * logits + loss_cls
         # print_log(f"seg_loss-{loss_cls.data},pwc_los-{logits.data}", logger=get_root_logger())
-        return loss2
+        return loss_cls
 
     def reform(self, phi_light, length, cal_size, target_shape):
         step = cal_size // length
