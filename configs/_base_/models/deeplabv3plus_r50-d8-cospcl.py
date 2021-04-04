@@ -27,7 +27,7 @@ model = dict(
         norm_cfg=norm_cfg,
         align_corners=False,
         loss_decode=dict(
-            type='KLPatchContrastiveLoss', use_sigmoid=False, loss_weight=0.1, cal_function='COS')),
+            type='KLPatchContrastiveLoss', use_sigmoid=False, loss_weight=0.6, cal_function='COS')),
     auxiliary_head=dict(
         type='FCNHead',
         in_channels=1024,

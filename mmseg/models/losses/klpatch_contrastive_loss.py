@@ -498,7 +498,7 @@ class KLPatchContrastiveLoss(nn.Module):
 
         b, c, h, w = cls_score.shape
         _, _, h1, w1 = original_cls_score.shape
-        cal_size = h1 * w1
+        self.cal_size = h1 * w1
         gt_seg = F.interpolate(label.unsqueeze(1).type(torch.cuda.FloatTensor), (h1, w1), mode='nearest').squeeze(1)
         gt_seg = gt_seg.type(torch.cuda.LongTensor)
         b_ft_cross_region, b_tt_region_score, b_cross_class, b_tt_class = self.cross_class(original_cls_score, gt_seg,
@@ -530,9 +530,9 @@ class KLPatchContrastiveLoss(nn.Module):
                     continue
                     ipdb.set_trace()
 
-                reform_phi1_light = self.reform(phi1_light, phi1_length, cal_size, [h1, w1])
-                reform_phi2_light = self.reform(phi2_light, phi2_length, cal_size, [h1, w1])
-                reform_cross_light = self.reform(cross_score_light, cross_score_length, cal_size, [h1, w1])
+                reform_phi1_light = self.reform(phi1_light, phi1_length, [h1, w1])
+                reform_phi2_light = self.reform(phi2_light, phi2_length, [h1, w1])
+                reform_cross_light = self.reform(cross_score_light, cross_score_length, [h1, w1])
                 if not cross_feature:
                     pos_feature = [reform_phi2_light]
                     neg_feature = [reform_phi1_light]
@@ -550,12 +550,14 @@ class KLPatchContrastiveLoss(nn.Module):
             logits = self.cons_func(cross_feature, pos_feature, neg_feature, count)
 
             loss_cls = self.loss_weight * logits + loss_cls
-        # print_log(f"seg_loss-{loss_cls.data},pwc_los-{logits.data}", logger=get_root_logger())
+            # print_log(f"seg_loss-{loss_cls.data},pwc_loss-{logits.data}",
+            #           logger=get_root_logger(log_file='./work_dirs/log.log'))
+
         return loss_cls
 
-    def reform(self, phi_light, length, cal_size, target_shape):
-        step = cal_size // length
-        rest = cal_size % length
+    def reform(self, phi_light, length, target_shape):
+        step = self.cal_size // length
+        rest = self.cal_size % length
         reform_features = []
         for i in range(step):
             if not reform_features:
@@ -575,9 +577,7 @@ class KLPatchContrastiveLoss(nn.Module):
         return logits
 
     def calculate_cosin(self, cross_feature, pos_feature, neg_feature, count):
-        pos_scores = F.cosine_similarity(cross_feature, pos_feature, dim=1)
-        neg_scores = F.cosine_similarity(cross_feature, neg_feature, dim=1)
-        ipdb.set_trace()
-        pos_scores = pos_scores if pos_scores != 0 else 1
-        logits = -torch.log(pos_scores / (pos_scores + neg_scores + 1e-8)).sum() / count
+        pos_scores = torch.exp(F.cosine_similarity(cross_feature, pos_feature.detach(), dim=1))
+        neg_scores = torch.exp(F.cosine_similarity(cross_feature, neg_feature.detach(), dim=1))
+        logits = -torch.log(pos_scores / (neg_scores + 1e-8)).sum() / (count*self.cal_size)
         return logits
