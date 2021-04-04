@@ -377,7 +377,8 @@ class KLPatchContrastiveLoss(nn.Module):
                  reduction='mean',
                  class_weight=None,
                  loss_weight=0.1,
-                 patch_size=16, ):
+                 patch_size=16,
+                 cal_function='KL'):
         super(KLPatchContrastiveLoss, self).__init__()
         assert (use_sigmoid is False) or (use_mask is False)
         self.use_sigmoid = use_sigmoid
@@ -387,6 +388,11 @@ class KLPatchContrastiveLoss(nn.Module):
         self.class_weight = class_weight
         self.patch_size = patch_size
         self.temp = 50
+        if cal_function == 'KL':
+            self.cons_func = self.calculate_kl
+        else:
+            self.cons_func = self.calculate_cosin
+
         if self.use_sigmoid:
             self.cls_criterion = binary_cross_entropy
         elif self.use_mask:
@@ -541,10 +547,7 @@ class KLPatchContrastiveLoss(nn.Module):
             neg_feature = torch.stack(neg_feature, dim=0)
             cross_feature = torch.stack(cross_feature, dim=0)
 
-            pos_scores = F.kl_div(cross_feature, pos_feature, reduction='mean')
-            neg_feature = F.kl_div(cross_feature, neg_feature, reduction='mean')
-            pos_scores = pos_scores if pos_scores != 0 else 1
-            logits = -torch.log(pos_scores / (pos_scores + neg_feature + 1e-8)) / count
+            logits = self.cons_func(cross_feature, pos_feature, neg_feature, count)
 
             loss_cls = self.loss_weight * logits + loss_cls
         # print_log(f"seg_loss-{loss_cls.data},pwc_los-{logits.data}", logger=get_root_logger())
@@ -563,3 +566,18 @@ class KLPatchContrastiveLoss(nn.Module):
         reform_features = torch.cat(reform_features, dim=1)
         reform_features = torch.reshape(reform_features, (-1, target_shape[0], target_shape[1]))
         return reform_features
+
+    def calculate_kl(self, cross_feature, pos_feature, neg_feature, count):
+        pos_scores = F.kl_div(cross_feature, pos_feature, reduction='mean')
+        neg_feature = F.kl_div(cross_feature, neg_feature, reduction='mean')
+        pos_scores = pos_scores if pos_scores != 0 else 1
+        logits = -torch.log(pos_scores / (pos_scores + neg_feature + 1e-8)) / count
+        return logits
+
+    def calculate_cosin(self, cross_feature, pos_feature, neg_feature, count):
+        pos_scores = F.cosine_similarity(cross_feature, pos_feature, dim=0).sum()
+        neg_feature = F.cosine_similarity(cross_feature, neg_feature, dim=0).sum()
+        ipdb.set_trace()
+        pos_scores = pos_scores if pos_scores != 0 else 1
+        logits = -torch.log(pos_scores / (pos_scores + neg_feature + 1e-8)) / count
+        return logits
