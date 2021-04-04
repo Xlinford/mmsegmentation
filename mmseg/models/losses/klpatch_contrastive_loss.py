@@ -569,15 +569,15 @@ class KLPatchContrastiveLoss(nn.Module):
 
     def calculate_kl(self, cross_feature, pos_feature, neg_feature, count):
         pos_scores = F.kl_div(cross_feature, pos_feature, reduction='mean')
-        neg_feature = F.kl_div(cross_feature, neg_feature, reduction='mean')
+        neg_scores = F.kl_div(cross_feature, neg_feature, reduction='mean')
         pos_scores = pos_scores if pos_scores != 0 else 1
-        logits = -torch.log(pos_scores / (pos_scores + neg_feature + 1e-8)) / count
+        logits = -torch.log(pos_scores / (pos_scores + neg_scores + 1e-8)) / count
         return logits
 
     def calculate_cosin(self, cross_feature, pos_feature, neg_feature, count):
-        pos_scores = F.cosine_similarity(cross_feature, pos_feature, dim=0).sum()
-        neg_feature = F.cosine_similarity(cross_feature, neg_feature, dim=0).sum()
+        pos_scores = F.cosine_similarity(cross_feature, pos_feature, dim=1)
+        neg_scores = F.cosine_similarity(cross_feature, neg_feature, dim=1)
         ipdb.set_trace()
         pos_scores = pos_scores if pos_scores != 0 else 1
-        logits = -torch.log(pos_scores / (pos_scores + neg_feature + 1e-8)) / count
+        logits = -torch.log(pos_scores / (pos_scores + neg_scores + 1e-8)).sum() / count
         return logits
