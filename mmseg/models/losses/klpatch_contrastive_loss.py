@@ -526,7 +526,7 @@ class KLPatchContrastiveLoss(nn.Module):
                 phi1_length = phi1_light.shape[1]
                 phi2_length = phi2_light.shape[1]
                 cross_score_length = cross_score_light.shape[1]
-                if phi1_length * phi2_length * cross_score_length == 0:
+                if phi1_length * phi2_length * cross_score_length == 0 or cross_score_length < 99:
                     continue
                     ipdb.set_trace()
 
@@ -541,6 +541,7 @@ class KLPatchContrastiveLoss(nn.Module):
                     pos_feature.append(reform_phi2_light)
                     neg_feature.append(reform_phi1_light)
                     cross_feature.append(reform_cross_light)
+        # ipdb.set_trace()
         count = len(pos_feature)
         if count != 0:
             pos_feature = torch.stack(pos_feature, dim=0)
