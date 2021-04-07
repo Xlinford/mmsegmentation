@@ -5,5 +5,5 @@ _base_ = [
 ]
 model = dict(
     decode_head=dict(num_classes=21), auxiliary_head=dict(num_classes=21))
-optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
+optimizer = dict(type='SGD', lr=0.00001, momentum=0.9, weight_decay=0.0005)
 

@@ -390,9 +390,10 @@ class KLPatchContrastiveLoss(nn.Module):
         self.temp = 50
         if cal_function == 'KL':
             self.cons_func = self.calculate_kl
-        else:
+        elif cal_function == 'COS':
             self.cons_func = self.calculate_cosin
-
+        elif cal_function == 'COS07':
+            self.cons_func = self.calculate_cosin07
         if self.use_sigmoid:
             self.cls_criterion = binary_cross_entropy
         elif self.use_mask:
@@ -580,5 +581,14 @@ class KLPatchContrastiveLoss(nn.Module):
     def calculate_cosin(self, cross_feature, pos_feature, neg_feature, count):
         pos_scores = torch.exp(F.cosine_similarity(cross_feature, pos_feature.detach(), dim=1))
         neg_scores = torch.exp(F.cosine_similarity(cross_feature, neg_feature.detach(), dim=1))
+        # print_log(f"pos_scores-{pos_scores.sum()},\
+        #           neg_scores-{neg_scores.sum()},{pos_scores.sum() / neg_scores.sum()}",
+        #           logger=get_root_logger(log_file='./work_dirs/log.log'))
         logits = -torch.log(pos_scores / (neg_scores + 1e-8)).sum() / (count*self.cal_size)
+        return logits
+
+    def calculate_cosin07(self, cross_feature, pos_feature, neg_feature, count):
+        pos_scores = torch.exp(F.cosine_similarity(cross_feature, pos_feature.detach(), dim=1))
+        neg_scores = torch.exp(F.cosine_similarity(cross_feature, neg_feature.detach(), dim=1))
+        logits = -torch.log(pos_scores / (pos_scores+neg_scores + 1e-8)).sum() / (count*self.cal_size)
         return logits
