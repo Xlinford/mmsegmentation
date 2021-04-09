@@ -378,7 +378,8 @@ class KLPatchContrastiveLoss(nn.Module):
                  class_weight=None,
                  loss_weight=0.1,
                  patch_size=16,
-                 cal_function='KL'):
+                 cal_function='KL',
+                 cal_gate=99):
         super(KLPatchContrastiveLoss, self).__init__()
         assert (use_sigmoid is False) or (use_mask is False)
         self.use_sigmoid = use_sigmoid
@@ -387,6 +388,7 @@ class KLPatchContrastiveLoss(nn.Module):
         self.loss_weight = loss_weight
         self.class_weight = class_weight
         self.patch_size = patch_size
+        self.cal_gate = cal_gate
         self.temp = 50
         if cal_function == 'KL':
             self.cons_func = self.calculate_kl
@@ -527,7 +529,7 @@ class KLPatchContrastiveLoss(nn.Module):
                 phi1_length = phi1_light.shape[1]
                 phi2_length = phi2_light.shape[1]
                 cross_score_length = cross_score_light.shape[1]
-                if phi1_length * phi2_length * cross_score_length == 0 or cross_score_length < 99:
+                if phi1_length * phi2_length * cross_score_length == 0 or cross_score_length < self.cal_gate:
                     continue
                     ipdb.set_trace()
 

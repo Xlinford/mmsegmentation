@@ -8,7 +8,8 @@ model = dict(
                      loss_decode=dict(type='KLPatchContrastiveLoss',
                                       use_sigmoid=False,
                                       loss_weight=0.05,
-                                      cal_function='COS07')),
+                                      cal_function='COS07',
+                                      cal_gate=59)),
     auxiliary_head=dict(num_classes=21),)
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
 
