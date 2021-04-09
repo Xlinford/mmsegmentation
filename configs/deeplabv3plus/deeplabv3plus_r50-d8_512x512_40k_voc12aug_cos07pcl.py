@@ -7,7 +7,7 @@ model = dict(
     decode_head=dict(num_classes=21,
                      loss_decode=dict(type='KLPatchContrastiveLoss',
                                       use_sigmoid=False,
-                                      loss_weight=0.2,
+                                      loss_weight=0.3,
                                       cal_function='COS07',
                                       cal_gate=99)),
     auxiliary_head=dict(num_classes=21),)
