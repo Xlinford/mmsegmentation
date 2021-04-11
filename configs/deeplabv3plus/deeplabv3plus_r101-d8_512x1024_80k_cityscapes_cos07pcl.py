@@ -5,4 +5,5 @@ model = dict(pretrained='open-mmlab://resnet101_v1c', backbone=dict(depth=101),
                                                loss_weight=0.1,
                                                cal_function='COS07',
                                                cal_gate=99)))
+optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
 lr_config = dict(policy='poly', power=0.9, min_lr=5e-5, by_epoch=False)
