@@ -5,7 +5,7 @@ import json
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
-import seaborn as sns
+import seabocdrn as sns
 
 
 def plot_curve(log_dicts, args):
