@@ -2,6 +2,7 @@ from abc import ABCMeta, abstractmethod
 
 import torch
 import torch.nn as nn
+import ipdb
 from mmcv.cnn import normal_init
 from mmcv.runner import auto_fp16, force_fp32
 from mmcv.utils import print_log
@@ -243,12 +244,17 @@ class BaseDecodeHead(nn.Module, metaclass=ABCMeta):
         else:
             seg_weight = None
         seg_label = seg_label.squeeze(1)
-        loss['loss_seg'] = self.loss_decode(
+        loss_seg_tuple = self.loss_decode(
             seg_logit1,
             seg_label,
             weight=seg_weight,
             ignore_index=self.ignore_index,
             original_cls_score=seg_logit)
+        if type(loss_seg_tuple) == tuple:
+            loss['loss_seg'] = loss_seg_tuple[0]
+            loss['conloss_seg'] = loss_seg_tuple[1]
+        else:
+            loss['loss_seg'] = loss_seg_tuple
         loss['acc_seg'] = accuracy(seg_logit1, seg_label)
         return loss
 

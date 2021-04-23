@@ -379,8 +379,11 @@ class KLPatchContrastiveLoss(nn.Module):
                  loss_weight=0.1,
                  patch_size=16,
                  cal_function='KL',
-                 cal_gate=99):
+                 cal_gate=None,
+                 loss_ratio=False):
         super(KLPatchContrastiveLoss, self).__init__()
+        if cal_gate is None:
+            cal_gate = [0, 99]
         assert (use_sigmoid is False) or (use_mask is False)
         self.use_sigmoid = use_sigmoid
         self.use_mask = use_mask
@@ -389,13 +392,16 @@ class KLPatchContrastiveLoss(nn.Module):
         self.class_weight = class_weight
         self.patch_size = patch_size
         self.cal_gate = cal_gate
-        self.temp = 50
+        self.temp = 10
+        self.loss_ratio = loss_ratio
         if cal_function == 'KL':
             self.cons_func = self.calculate_kl
         elif cal_function == 'COS':
             self.cons_func = self.calculate_cosin
         elif cal_function == 'COS07':
             self.cons_func = self.calculate_cosin07
+        elif cal_function == 'triplet':
+            self.cons_func = self.calculate_triplet
         if self.use_sigmoid:
             self.cls_criterion = binary_cross_entropy
         elif self.use_mask:
@@ -405,7 +411,7 @@ class KLPatchContrastiveLoss(nn.Module):
 
     def cross_class(self, cls_score, label, b):
         # b, h, w = label.shape
-        cls_result = torch.argmax(cls_score, dim=1).detach() + 1  # [b,h,w]
+        cls_result = torch.argmax(cls_score, dim=1) + 1  # [b,h,w]
         label = label + 1
         diff = torch.eq(cls_result - label, 0).int()  # [b,h,w] same:True,1; different:False,0
         # invert_diff = (cls_result - label).nonzero()  # bool can use ~
@@ -482,7 +488,6 @@ class KLPatchContrastiveLoss(nn.Module):
             original_cls_score: [b,c,h/2,w/2]
 
         """
-        self.temp = 10
         assert reduction_override in (None, 'none', 'mean', 'sum')
         reduction = (
             reduction_override if reduction_override else self.reduction)
@@ -510,7 +515,7 @@ class KLPatchContrastiveLoss(nn.Module):
         pos_feature = []
         neg_feature = []
         cross_feature = []
-
+        cross_length = 0
         for i in range(b):
             cross_class = b_cross_class[i]
             for j, key in enumerate(cross_class):
@@ -521,15 +526,17 @@ class KLPatchContrastiveLoss(nn.Module):
                 phi2 = b_tt_region_score[i][:, :, :, tt_index2]
                 phi1 = torch.reshape(phi1, (c, -1))
                 phi2 = torch.reshape(phi2, (c, -1))
-                phi1_light = phi1[:, phi1.sum(dim=0) != 0].detach()  # [21, length1]
-                phi2_light = phi2[:, phi2.sum(dim=0) != 0].detach()  # [21, length2]
+                phi1_light = phi1[:, phi1.sum(dim=0) != 0]  # [21, length1]
+                phi2_light = phi2[:, phi2.sum(dim=0) != 0]  # [21, length2]
                 cross_score = original_cls_score[i, :, :, :] * b_ft_cross_region[i][:, :, j]
                 cross_score = torch.reshape(cross_score, (c, -1))
                 cross_score_light = cross_score[:, cross_score.sum(dim=0) != 0]  # [21, length]
                 phi1_length = phi1_light.shape[1]
                 phi2_length = phi2_light.shape[1]
                 cross_score_length = cross_score_light.shape[1]
-                if phi1_length * phi2_length * cross_score_length == 0 or cross_score_length < self.cal_gate:
+                if phi1_length * phi2_length * cross_score_length == 0 \
+                        or self.cal_gate[0] > cross_score_length \
+                        or self.cal_gate[1] < cross_score_length:
                     continue
                     ipdb.set_trace()
 
@@ -537,27 +544,30 @@ class KLPatchContrastiveLoss(nn.Module):
                 reform_phi2_light = self.reform(phi2_light, phi2_length, [h1, w1])
                 reform_cross_light = self.reform(cross_score_light, cross_score_length, [h1, w1])
                 if not cross_feature:
+                    cross_length = cross_score_length
                     pos_feature = [reform_phi2_light]
                     neg_feature = [reform_phi1_light]
                     cross_feature = [reform_cross_light]
                 else:
+                    cross_length += cross_score_length
                     pos_feature.append(reform_phi2_light)
                     neg_feature.append(reform_phi1_light)
                     cross_feature.append(reform_cross_light)
         # ipdb.set_trace()
         count = len(pos_feature)
+        logits = (loss_cls-loss_cls).detach()
         if count != 0:
             pos_feature = torch.stack(pos_feature, dim=0)
             neg_feature = torch.stack(neg_feature, dim=0)
             cross_feature = torch.stack(cross_feature, dim=0)
 
-            logits = self.cons_func(cross_feature, pos_feature, neg_feature, count)
+            logits = self.cons_func(cross_feature, pos_feature, neg_feature, count, cross_length)
 
             loss_cls = self.loss_weight * logits + loss_cls
             # print_log(f"seg_loss-{loss_cls.data},pwc_loss-{logits.data}",
             #           logger=get_root_logger(log_file='./work_dirs/log.log'))
 
-        return loss_cls
+        return loss_cls, logits
 
     def reform(self, phi_light, length, target_shape):
         step = self.cal_size // length
@@ -573,14 +583,14 @@ class KLPatchContrastiveLoss(nn.Module):
         reform_features = torch.reshape(reform_features, (-1, target_shape[0], target_shape[1]))
         return reform_features
 
-    def calculate_kl(self, cross_feature, pos_feature, neg_feature, count):
+    def calculate_kl(self, cross_feature, pos_feature, neg_feature, count, cross_length):
         pos_scores = F.kl_div(cross_feature, pos_feature, reduction='mean')
         neg_scores = F.kl_div(cross_feature, neg_feature, reduction='mean')
         pos_scores = pos_scores if pos_scores != 0 else 1
         logits = -torch.log(pos_scores / (pos_scores + neg_scores + 1e-8)) / count
         return logits
 
-    def calculate_cosin(self, cross_feature, pos_feature, neg_feature, count):
+    def calculate_cosin(self, cross_feature, pos_feature, neg_feature, count, cross_length):
         pos_scores = torch.exp(F.cosine_similarity(cross_feature, pos_feature.detach(), dim=1))
         neg_scores = torch.exp(F.cosine_similarity(cross_feature, neg_feature.detach(), dim=1))
         # print_log(f"pos_scores-{pos_scores.sum()},\
@@ -589,8 +599,21 @@ class KLPatchContrastiveLoss(nn.Module):
         logits = -torch.log(pos_scores / (neg_scores + 1e-8)).sum() / (count*self.cal_size)
         return logits
 
-    def calculate_cosin07(self, cross_feature, pos_feature, neg_feature, count):
-        pos_scores = torch.exp(F.cosine_similarity(cross_feature, pos_feature.detach(), dim=1))
-        neg_scores = torch.exp(F.cosine_similarity(cross_feature, neg_feature.detach(), dim=1))
-        logits = -torch.log(pos_scores / (pos_scores+neg_scores + 1e-8)).sum() / (count*self.cal_size)
+    def calculate_cosin07(self, cross_feature, pos_feature, neg_feature, count, cross_length):
+        if self.loss_ratio:
+            pos_scores = torch.exp(F.cosine_similarity(cross_feature, pos_feature.detach(), dim=1)/self.temp)
+            neg_scores = torch.exp(F.cosine_similarity(cross_feature, neg_feature.detach(), dim=1)/self.temp)
+            logits = -torch.log(pos_scores / (pos_scores+neg_scores + 1e-8)).sum() / (count*self.cal_size**2/cross_length)
+        else:
+            pos_scores = torch.exp(F.cosine_similarity(cross_feature, pos_feature.detach(), dim=1))
+            neg_scores = torch.exp(F.cosine_similarity(cross_feature, neg_feature.detach(), dim=1))
+            logits = -torch.log(pos_scores / (pos_scores+neg_scores + 1e-8)).sum() / (count*self.cal_size)
+        return logits
+
+    def calculate_triplet(self, cross_feature, pos_feature, neg_feature, count, cross_length):
+        if self.loss_ratio:
+            logits = F.triplet_margin_loss(cross_feature, pos_feature, neg_feature)
+        else:
+            logits = F.triplet_margin_loss(cross_feature, pos_feature, neg_feature)
+        ipdb.set_trace()
         return logits
