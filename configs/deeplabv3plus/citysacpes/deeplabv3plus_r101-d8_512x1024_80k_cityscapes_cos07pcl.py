@@ -3,7 +3,7 @@ model = dict(pretrained='open-mmlab://resnet101_v1c', backbone=dict(depth=101),
              decode_head=dict(loss_decode=dict(type='KLPatchContrastiveLoss',
                                                use_sigmoid=False,
                                                loss_ratio=True,
-                                               loss_weight=1.5,
+                                               loss_weight=1.1,
                                                cal_function='COS07',
                                                cal_gate=[49, 199])))
 optimizer = dict(type='SGD', lr=0.01, momentum=0.9, weight_decay=0.0005)
